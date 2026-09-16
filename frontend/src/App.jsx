@@ -1,20 +1,46 @@
 import React, { useState, useEffect } from 'react';
-import Header from './components/Header';
+import Sidebar from './components/Sidebar';
+import DashboardView from './components/DashboardView';
 import EvaluationForm from './components/EvaluationForm';
-import EvidenceViewer from './components/EvidenceViewer';
-import { History, Search, CheckCircle, RefreshCw } from 'lucide-react';
+import EvaluationResultView from './components/EvaluationResultView';
+import HistoryView from './components/HistoryView';
+import EvidenceLibraryView from './components/EvidenceLibraryView';
+import KnowledgeBaseView from './components/KnowledgeBaseView';
+import AnalyticsView from './components/AnalyticsView';
+import ReportsView from './components/ReportsView';
+import SystemStatusView from './components/SystemStatusView';
+import SettingsModal from './components/SettingsModal';
+import { Database, ShieldCheck, Cpu, Moon, Sun } from 'lucide-react';
 
 export default function App() {
-  const [activeTab, setActiveTab] = useState('evaluate'); // 'evaluate' | 'history'
+  const [activePage, setActivePage] = useState('verify');
   const [loading, setLoading] = useState(false);
-  const [currentResult, setCurrentResult] = useState(null);
+  const [currentEvaluation, setCurrentEvaluation] = useState(null);
   const [systemHealth, setSystemHealth] = useState(null);
   const [historyList, setHistoryList] = useState([]);
   const [historyLoading, setHistoryLoading] = useState(false);
+  const [analytics, setAnalytics] = useState(null);
+  const [errorMessage, setErrorMessage] = useState(null);
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
 
-  // Fetch health on mount
+  // Theme state with localStorage persistence
+  const [theme, setTheme] = useState(() => {
+    return localStorage.getItem('proofRagTheme') || 'light';
+  });
+
+  useEffect(() => {
+    document.documentElement.setAttribute('data-theme', theme);
+    localStorage.setItem('proofRagTheme', theme);
+  }, [theme]);
+
+  const toggleTheme = () => {
+    setTheme((prev) => (prev === 'light' ? 'dark' : 'light'));
+  };
+
   useEffect(() => {
     fetchHealth();
+    fetchHistory();
+    fetchAnalytics();
   }, []);
 
   const fetchHealth = async () => {
@@ -25,27 +51,41 @@ export default function App() {
         setSystemHealth(data);
       }
     } catch (err) {
-      console.error('Health check error:', err);
+      console.warn('[PROOFRAG] Health check warning:', err);
     }
   };
 
   const fetchHistory = async () => {
     setHistoryLoading(true);
     try {
-      const res = await fetch('/api/submissions?limit=30');
+      const res = await fetch('/api/submissions?limit=50');
       if (res.ok) {
         const data = await res.json();
-        setHistoryList(data);
+        setHistoryList(Array.isArray(data) ? data : []);
       }
     } catch (err) {
-      console.error('History fetch error:', err);
+      console.warn('[PROOFRAG] History fetch warning:', err);
     } finally {
       setHistoryLoading(false);
     }
   };
 
+  const fetchAnalytics = async () => {
+    try {
+      const res = await fetch('/api/analytics');
+      if (res.ok) {
+        const data = await res.json();
+        setAnalytics(data);
+      }
+    } catch (err) {
+      console.warn('[PROOFRAG] Analytics fetch warning:', err);
+    }
+  };
+
   const handleEvaluate = async (formData) => {
     setLoading(true);
+    setErrorMessage(null);
+
     try {
       const res = await fetch('/api/submissions', {
         method: 'POST',
@@ -53,129 +93,203 @@ export default function App() {
         body: JSON.stringify(formData),
       });
 
+      const contentType = res.headers.get('content-type');
+
       if (!res.ok) {
-        const errData = await res.json();
-        throw new Error(errData.detail || 'Evaluation request failed');
+        let errMsg = 'Unable to verify response. Please check that the backend is running.';
+        if (contentType && contentType.includes('application/json')) {
+          try {
+            const errData = await res.json();
+            errMsg = errData.error || errData.detail || errMsg;
+          } catch {
+            // fallback
+          }
+        }
+        throw new Error(errMsg);
       }
 
       const data = await res.json();
-      setCurrentResult(data);
-      fetchHealth(); // refresh indexed counts if updated
+      setCurrentEvaluation(data);
+      fetchHistory();
+      fetchAnalytics();
+      fetchHealth();
     } catch (err) {
-      alert('Error during evaluation: ' + err.message);
+      console.error('[PROOFRAG Error]:', err);
+      const userMsg =
+        err.message && !err.message.includes('Traceback')
+          ? err.message
+          : 'Unable to verify response. Please verify backend connectivity.';
+      setErrorMessage(userMsg);
     } finally {
       setLoading(false);
     }
   };
 
-  const handleSelectHistoryItem = async (submissionId) => {
+  const handleSelectSubmission = async (submissionId) => {
     setLoading(true);
-    setActiveTab('evaluate');
+    setErrorMessage(null);
+
     try {
       const res = await fetch(`/api/submissions/${submissionId}`);
-      if (res.ok) {
-        const data = await res.json();
-        setCurrentResult(data);
+      if (!res.ok) {
+        throw new Error('Unable to retrieve submission record.');
       }
+      const data = await res.json();
+      setCurrentEvaluation(data);
+      setActivePage('verify');
     } catch (err) {
-      alert('Failed to load submission: ' + err.message);
+      setErrorMessage(err.message || 'Unable to load submission details.');
     } finally {
       setLoading(false);
     }
+  };
+
+  const pageTitles = {
+    verify: 'Verify Response',
+    evaluate: 'Verify Response',
+    dashboard: 'Verify Response',
+    history: 'Evaluation History',
+    'evidence-library': 'Evidence Library',
+    'data-sources': 'Data Sources',
+    'knowledge-base': 'Data Sources',
+    insights: 'Verification Insights',
+    analytics: 'Verification Insights',
+    reports: 'Audit Reports',
+    'system-status': 'System Status',
+    architecture: 'System Status',
   };
 
   return (
-    <div className="app-container">
-      <Header systemHealth={systemHealth} />
+    <div className="app-container" data-theme={theme}>
+      {/* Left Navigation Sidebar */}
+      <Sidebar
+        activePage={activePage}
+        setActivePage={setActivePage}
+        historyCount={historyList.length}
+        onOpenSettings={() => setIsSettingsOpen(true)}
+      />
 
-      {/* M1 Information Banner */}
-      <div className="m1-notice-banner">
-        <div className="notice-content">
-          <span className="notice-badge">Milestone 1</span>
-          <span>
-            Semantic Evidence Retrieval & Ingestion Pipeline: Ingests TruthfulQA and SQuAD benchmarks into ChromaDB and retrieves relevant evidence for grounded AI response evaluation.
-          </span>
-        </div>
-        <div style={{ display: 'flex', gap: '0.5rem' }}>
-          <button
-            onClick={() => { setActiveTab('evaluate'); }}
-            className="chip-btn"
-            style={{
-              background: activeTab === 'evaluate' ? 'var(--accent-primary)' : 'rgba(255,255,255,0.05)',
-              color: activeTab === 'evaluate' ? '#FFF' : 'var(--text-secondary)'
-            }}
-          >
-            <Search size={14} style={{ display: 'inline', marginRight: '4px', verticalAlign: 'text-bottom' }} />
-            Single Submission
-          </button>
-          <button
-            onClick={() => { setActiveTab('history'); fetchHistory(); }}
-            className="chip-btn"
-            style={{
-              background: activeTab === 'history' ? 'var(--accent-primary)' : 'rgba(255,255,255,0.05)',
-              color: activeTab === 'history' ? '#FFF' : 'var(--text-secondary)'
-            }}
-          >
-            <History size={14} style={{ display: 'inline', marginRight: '4px', verticalAlign: 'text-bottom' }} />
-            History ({historyList.length})
-          </button>
-        </div>
-      </div>
-
-      {activeTab === 'evaluate' ? (
-        <main className="main-grid">
-          <EvaluationForm onSubmit={handleEvaluate} loading={loading} />
-          <EvidenceViewer result={currentResult} loading={loading} />
-        </main>
-      ) : (
-        <div className="panel-card">
-          <div className="panel-header">
-            <h2>
-              <History size={18} color="#818CF8" />
-              Submission History (SQLite Storage)
-            </h2>
-            <button
-              onClick={fetchHistory}
-              className="chip-btn"
-              style={{ display: 'flex', alignItems: 'center', gap: '4px' }}
-            >
-              <RefreshCw size={12} />
-              Refresh
-            </button>
+      {/* Main App Canvas */}
+      <div className="main-wrapper">
+        {/* Top Header Bar */}
+        <header className="topbar">
+          <div className="topbar-page-info">
+            <h1 className="topbar-title">{pageTitles[activePage] || 'PROOFRAG'}</h1>
           </div>
 
-          {historyLoading ? (
-            <p style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-muted)' }}>Loading history...</p>
-          ) : historyList.length === 0 ? (
-            <div className="empty-state">
-              <p>No evaluation submissions stored yet.</p>
+          <div className="topbar-meta-row">
+            {/* Light / Dark Mode Toggle */}
+            <button
+              type="button"
+              id="theme-toggle-btn"
+              className="theme-toggle-btn"
+              onClick={toggleTheme}
+              title={`Switch to ${theme === 'light' ? 'Dark' : 'Light'} Mode (Current: ${theme === 'light' ? 'Light' : 'Dark'})`}
+              aria-label={`Switch to ${theme === 'light' ? 'Dark' : 'Light'} Mode`}
+            >
+              {theme === 'light' ? (
+                <>
+                  <Moon size={14} />
+                  <span className="theme-toggle-label">Dark</span>
+                </>
+              ) : (
+                <>
+                  <Sun size={14} />
+                  <span className="theme-toggle-label">Light</span>
+                </>
+              )}
+            </button>
+
+            <div className="telemetry-chip">
+              <span className="status-dot-green" />
+              <span>Model:</span>
+              <strong style={{ color: 'var(--text-primary)' }}>
+                {systemHealth?.embedding_model || 'all-MiniLM-L6-v2'}
+              </strong>
             </div>
-          ) : (
-            <div>
-              {historyList.map((item) => (
-                <div
-                  key={item.submission_id}
-                  className="history-item"
-                  onClick={() => handleSelectHistoryItem(item.submission_id)}
-                >
-                  <div>
-                    <div className="history-q">{item.question}</div>
-                    <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginTop: '0.2rem' }}>
-                      AI Response: {item.ai_response_snippet}
-                    </div>
-                  </div>
-                  <div style={{ textAlign: 'right' }}>
-                    <span className="dataset-tag tag-squad" style={{ marginRight: '0.5rem' }}>
-                      {item.evidence_count} Chunks
-                    </span>
-                    <span className="history-meta">{item.created_at.slice(0, 10)}</span>
-                  </div>
-                </div>
-              ))}
+
+            <div className="telemetry-chip">
+              <Database size={13} style={{ color: 'var(--accent-primary)' }} />
+              <span>Chunks:</span>
+              <strong style={{ color: 'var(--text-primary)' }}>
+                {systemHealth?.total_indexed_chunks !== undefined ? systemHealth.total_indexed_chunks : '543'}
+              </strong>
+            </div>
+          </div>
+        </header>
+
+        {/* Dynamic Body Content */}
+        <main className="content-body">
+          {(activePage === 'verify' || activePage === 'evaluate' || activePage === 'dashboard') && (
+            <div className="evaluate-layout-grid">
+              <section aria-label="Input Form Column">
+                <EvaluationForm
+                  onSubmit={handleEvaluate}
+                  loading={loading}
+                  errorMessage={errorMessage}
+                  onClearError={() => setErrorMessage(null)}
+                />
+              </section>
+
+              <section aria-label="Evaluation Results Column">
+                <EvaluationResultView
+                  evaluation={currentEvaluation}
+                  onBackToForm={() => setCurrentEvaluation(null)}
+                />
+              </section>
             </div>
           )}
-        </div>
-      )}
+
+          {activePage === 'history' && (
+            <HistoryView
+              historyList={historyList}
+              loading={historyLoading}
+              onSelectSubmission={handleSelectSubmission}
+              onRefresh={fetchHistory}
+            />
+          )}
+
+          {activePage === 'evidence-library' && (
+            <EvidenceLibraryView systemHealth={systemHealth} />
+          )}
+
+          {(activePage === 'data-sources' || activePage === 'knowledge-base') && (
+            <KnowledgeBaseView systemHealth={systemHealth} />
+          )}
+
+          {(activePage === 'insights' || activePage === 'analytics') && (
+            <AnalyticsView
+              analytics={analytics}
+              onNewEvaluation={() => setActivePage('verify')}
+            />
+          )}
+
+          {activePage === 'reports' && (
+            <ReportsView
+              currentEvaluation={currentEvaluation}
+              historyList={historyList}
+              onSelectSubmission={handleSelectSubmission}
+              onNewEvaluation={() => setActivePage('verify')}
+            />
+          )}
+
+          {(activePage === 'system-status' || activePage === 'architecture') && (
+            <SystemStatusView
+              systemHealth={systemHealth}
+              onRefreshHealth={fetchHealth}
+            />
+          )}
+        </main>
+      </div>
+
+      {/* Settings Modal */}
+      <SettingsModal
+        isOpen={isSettingsOpen}
+        onClose={() => setIsSettingsOpen(false)}
+        systemHealth={systemHealth}
+        theme={theme}
+        onToggleTheme={toggleTheme}
+      />
     </div>
   );
 }

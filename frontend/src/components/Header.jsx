@@ -1,26 +1,61 @@
 import React from 'react';
-import { ShieldCheck, Database, Cpu } from 'lucide-react';
+import { ShieldCheck, Database, Sparkles, History } from 'lucide-react';
 
-export default function Header({ systemHealth }) {
+export default function Header({ systemHealth, activeTab, setActiveTab, historyCount }) {
   return (
-    <header className="header">
-      <div className="header-brand">
-        <div className="header-logo">
-          <ShieldCheck size={28} color="#FFFFFF" />
+    <header className="lab-header">
+      <div className="lab-header-top">
+        <div className="brand-lockup">
+          <div className="brand-orb">
+            <ShieldCheck size={28} className="brand-orb-icon" />
+            <div className="orb-pulse-ring" />
+          </div>
+          <div className="brand-text">
+            <div className="brand-badge-row">
+              <span className="brand-name">PROOFRAG</span>
+              <span className="brand-tag">AI RESPONSE VERIFICATION</span>
+            </div>
+            <h1 className="hero-question">Check whether an AI answer is supported by reliable evidence.</h1>
+            <p className="hero-subtext">Find supporting evidence from trusted benchmark and reference data</p>
+          </div>
         </div>
-        <div className="header-titles">
-          <h1>VeriRAG</h1>
-          <p>Evidence-Grounded AI Response Validation System with Hallucination Detection Assistance</p>
-        </div>
-      </div>
-      <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center', flexWrap: 'wrap' }}>
-        <div className="header-status-badge">
-          <span className="status-dot"></span>
-          <span>M1: Evidence Grounding Active</span>
-        </div>
-        <div className="header-status-badge" style={{ background: 'rgba(16, 185, 129, 0.1)', borderColor: 'rgba(16, 185, 129, 0.3)', color: '#34D399' }}>
-          <Database size={14} />
-          <span>{systemHealth ? `${systemHealth.total_indexed_chunks} Indexed Chunks` : 'Connecting to ChromaDB...'}</span>
+
+        <div className="header-controls">
+          <div className="telemetry-bar">
+            <div className="telemetry-item">
+              <span className="telemetry-indicator online" />
+              <span className="telemetry-label">Engine:</span>
+              <span className="telemetry-val">all-MiniLM-L6-v2</span>
+            </div>
+            <div className="telemetry-item">
+              <Database size={13} className="telemetry-icon" />
+              <span className="telemetry-label">Knowledge Base:</span>
+              <span className="telemetry-val">
+                {systemHealth ? `${systemHealth.total_indexed_chunks} chunks` : 'Connecting...'}
+              </span>
+            </div>
+          </div>
+
+          <div className="nav-toggle-group">
+            <button
+              type="button"
+              id="tab-verify-btn"
+              onClick={() => setActiveTab('evaluate')}
+              className={`nav-btn ${activeTab === 'evaluate' ? 'active' : ''}`}
+            >
+              <Sparkles size={14} />
+              <span>Check Answer</span>
+            </button>
+            <button
+              type="button"
+              id="tab-archive-btn"
+              onClick={() => setActiveTab('history')}
+              className={`nav-btn ${activeTab === 'history' ? 'active' : ''}`}
+            >
+              <History size={14} />
+              <span>Archive ({historyCount})</span>
+            </button>
+          </div>
         </div>
       </div>
     </header>

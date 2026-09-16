@@ -15,8 +15,8 @@ def test_root_endpoint(client):
     response = client.get("/")
     assert response.status_code == 200
     data = response.json()
-    assert data["project"] == "VeriRAG"
-    assert "Milestone 1" in data["milestone"]
+    assert data["status"] == "online"
+    assert "PROOFRAG" in data.get("name", "") or "PROOFRAG" in data.get("project", "")
 
 
 def test_health_endpoint(client):

@@ -1,7 +1,7 @@
 """Sentence-transformers local embedding generator."""
 
 import os
-from typing import List, Union
+from typing import List, Optional, Union
 from sentence_transformers import SentenceTransformer
 
 

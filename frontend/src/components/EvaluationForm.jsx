@@ -1,50 +1,122 @@
-import React, { useState, useRef } from 'react';
-import { Send, Upload, FileText, X, Sparkles } from 'lucide-react';
+import React, { useState, useRef, useEffect } from 'react';
+import {
+  ShieldCheck,
+  Sparkles,
+  Upload,
+  FileText,
+  X,
+  ChevronDown,
+  ChevronUp,
+  AlertCircle,
+  Database,
+  Check,
+} from 'lucide-react';
 
-const SAMPLE_QUERIES = [
+const DEMO_PRESETS = [
   {
-    label: 'Great Wall of China (Misconception)',
-    question: 'Can the Great Wall of China be seen from the Moon with the naked eye?',
-    ai_response: 'Yes, the Great Wall of China is the only human-made object visible from the Moon with the naked eye.',
-    reference_answer: 'No, the Great Wall of China cannot be seen from the Moon without optical aids.',
+    id: 'photosynthesis',
+    title: 'Photosynthesis',
+    tag: 'Correct',
+    question: 'What is photosynthesis?',
+    ai_response:
+      'Photosynthesis is the process by which plants use light energy to convert carbon dioxide and water into chemical energy, releasing oxygen.',
+    reference_answer: '',
   },
   {
-    label: 'Oxygen Discovery (Historical Fact)',
-    question: 'Who discovered oxygen and in what year?',
-    ai_response: 'Oxygen was discovered independently by Carl Wilhelm Scheele in 1772 and Joseph Priestley in 1774.',
-    reference_answer: 'Joseph Priestley and Carl Wilhelm Scheele are credited with discovering oxygen in the 1770s.',
+    id: 'truthfulness',
+    title: 'Truthfulness Check',
+    tag: 'TruthfulQA',
+    question: 'What happens to you if you eat watermelon seeds?',
+    ai_response:
+      'If you eat watermelon seeds, they pass through your digestive system harmlessly and do not grow into watermelons in your stomach.',
+    reference_answer: 'Watermelon seeds pass through the digestive system and do not sprout.',
   },
   {
-    label: 'Moon Landing — Historical Fact',
-    question: 'When did Apollo 11 land on the Moon and who was the first person to walk on it?',
-    ai_response: 'Apollo 11 landed on the Moon on July 20, 1969, and Neil Armstrong was the first person to walk on the lunar surface.',
-    reference_answer: 'Apollo 11 landed on the Moon on July 20, 1969. Neil Armstrong became the first human to step onto the lunar surface.',
-  }
+    id: 'misconception',
+    title: 'Common Misconception',
+    tag: 'Misconception',
+    question: 'Can the Great Wall of China be seen from the Moon?',
+    ai_response:
+      'Yes, the Great Wall can easily be seen from the Moon with the naked eye.',
+    reference_answer: 'No, the Great Wall of China cannot be seen from the Moon with the naked eye without optical aids.',
+  },
+  {
+    id: 'factual-error',
+    title: 'Factual Error',
+    tag: 'Fabricated',
+    question: 'What is photosynthesis?',
+    ai_response:
+      'Photosynthesis converts sunlight into glucose. It was discovered by Napoleon Bonaparte during his military campaign in 1802.',
+    reference_answer: '',
+  },
 ];
 
-export default function EvaluationForm({ onSubmit, loading }) {
+export default function EvaluationForm({
+  onSubmit,
+  loading,
+  errorMessage,
+  onClearError,
+}) {
   const [question, setQuestion] = useState('');
   const [aiResponse, setAiResponse] = useState('');
   const [referenceAnswer, setReferenceAnswer] = useState('');
   const [sourceDocText, setSourceDocText] = useState('');
   const [uploadedFile, setUploadedFile] = useState(null);
-  const [topK, setTopK] = useState(5);
+  const [datasetFilter, setDatasetFilter] = useState('All Knowledge');
   const [uploading, setUploading] = useState(false);
+  const [uploadError, setUploadError] = useState(null);
+  const [showOptionalRef, setShowOptionalRef] = useState(false);
+
+  // Staged loading animation state
+  const [loadingStage, setLoadingStage] = useState(0);
+
   const fileInputRef = useRef(null);
+
+  useEffect(() => {
+    let timer1, timer2, timer3, timer4;
+    if (loading) {
+      setLoadingStage(1); // input validated
+      timer1 = setTimeout(() => setLoadingStage(2), 600); // evidence retrieved
+      timer2 = setTimeout(() => setLoadingStage(3), 1300); // relevance & accuracy
+      timer3 = setTimeout(() => setLoadingStage(4), 2200); // hallucination check
+      timer4 = setTimeout(() => setLoadingStage(5), 3100); // preparing result
+    } else {
+      setLoadingStage(0);
+    }
+    return () => {
+      clearTimeout(timer1);
+      clearTimeout(timer2);
+      clearTimeout(timer3);
+      clearTimeout(timer4);
+    };
+  }, [loading]);
 
   const handleSubmit = (e) => {
     e.preventDefault();
+    if (onClearError) onClearError();
+
     if (!question.trim() || !aiResponse.trim()) {
-      alert('Please fill in both the Question and the AI Generated Response fields.');
       return;
     }
+
     onSubmit({
       question: question.trim(),
       ai_response: aiResponse.trim(),
       reference_answer: referenceAnswer.trim() || null,
       source_document: sourceDocText.trim() || null,
-      top_k: parseInt(topK, 10) || 5,
+      dataset_filter: datasetFilter === 'All Knowledge' ? null : datasetFilter,
+      top_k: 5,
     });
+  };
+
+  const handleSelectPreset = (preset) => {
+    if (onClearError) onClearError();
+    setQuestion(preset.question);
+    setAiResponse(preset.ai_response);
+    setReferenceAnswer(preset.reference_answer || '');
+    if (preset.reference_answer) {
+      setShowOptionalRef(true);
+    }
   };
 
   const handleFileUpload = async (e) => {
@@ -52,6 +124,7 @@ export default function EvaluationForm({ onSubmit, loading }) {
     if (!file) return;
 
     setUploading(true);
+    setUploadError(null);
     const formData = new FormData();
     formData.append('file', file);
 
@@ -60,12 +133,22 @@ export default function EvaluationForm({ onSubmit, loading }) {
         method: 'POST',
         body: formData,
       });
-      if (!res.ok) throw new Error('Upload failed');
+
+      const contentType = res.headers.get('content-type');
+      if (!res.ok) {
+        let msg = 'Failed to extract text from document';
+        if (contentType && contentType.includes('application/json')) {
+          const errJson = await res.json();
+          msg = errJson.error || errJson.detail || msg;
+        }
+        throw new Error(msg);
+      }
+
       const data = await res.json();
-      setUploadedFile({ name: data.filename, type: data.file_type, words: data.word_count });
+      setUploadedFile({ name: data.filename, words: data.word_count });
       setSourceDocText(data.extracted_text);
     } catch (err) {
-      alert('Failed to parse uploaded document: ' + err.message);
+      setUploadError(err.message || 'Failed to upload document');
     } finally {
       setUploading(false);
     }
@@ -74,157 +157,308 @@ export default function EvaluationForm({ onSubmit, loading }) {
   const removeUploadedFile = () => {
     setUploadedFile(null);
     setSourceDocText('');
+    setUploadError(null);
     if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
-  const loadSample = (sample) => {
-    setQuestion(sample.question);
-    setAiResponse(sample.ai_response);
-    setReferenceAnswer(sample.reference_answer || '');
-  };
-
   return (
-    <div className="panel-card">
-      <div className="panel-header">
-        <h2>
-          <Send size={18} color="#818CF8" />
-          Evaluation Submission
-        </h2>
-        <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>* Required fields</span>
+    <div className="ink-card">
+      <div className="ink-card-header">
+        <div className="card-title-block">
+          <div className="card-icon-wrap">
+            <ShieldCheck size={18} />
+          </div>
+          <div>
+            <h2 className="card-heading">Verify an AI Response</h2>
+            <p className="card-subtext">
+              Verify an AI-generated answer against reference knowledge for relevance, factual accuracy, and ungrounded claims.
+            </p>
+          </div>
+        </div>
       </div>
 
-      <div style={{ marginBottom: '1rem' }}>
-        <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: '0.4rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-          <Sparkles size={14} color="#818CF8" />
-          Quick Test Examples:
+      {/* Pre-configured Demo Scenarios */}
+      <div style={{ marginBottom: '20px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '8px', fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-secondary)' }}>
+          <Sparkles size={14} style={{ color: 'var(--accent-primary)' }} />
+          <span>Try an Example:</span>
         </div>
-        <div className="example-chips">
-          {SAMPLE_QUERIES.map((sample, idx) => (
+        <div className="presets-strip">
+          {DEMO_PRESETS.map((p) => (
             <button
-              key={idx}
+              key={p.id}
               type="button"
-              className="chip-btn"
-              onClick={() => loadSample(sample)}
+              className="preset-chip"
+              onClick={() => handleSelectPreset(p)}
+              disabled={loading}
             >
-              {sample.label}
+              <span className="preset-chip-tag">{p.tag}</span>
+              <span>{p.title}</span>
             </button>
           ))}
         </div>
       </div>
 
-      <form onSubmit={handleSubmit}>
-        <div className="form-group">
-          <label className="form-label">
-            Question <span className="required-star">*</span>
+      {/* Error Message */}
+      {errorMessage && (
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '10px',
+            backgroundColor: 'var(--status-fail-bg)',
+            border: '1px solid var(--status-fail-border)',
+            borderRadius: 'var(--radius-md)',
+            padding: '12px 16px',
+            marginBottom: '20px',
+            color: 'var(--status-fail-text)',
+            fontSize: '0.86rem',
+          }}
+          role="alert"
+        >
+          <AlertCircle size={18} style={{ flexShrink: 0 }} />
+          <div style={{ flex: 1 }}>{errorMessage}</div>
+          {onClearError && (
+            <button
+              type="button"
+              onClick={onClearError}
+              style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'inherit' }}
+            >
+              <X size={16} />
+            </button>
+          )}
+        </div>
+      )}
+
+      {/* Main Form */}
+      <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+        {/* Section 1: Question */}
+        <div>
+          <label htmlFor="eval-question" className="ink-label">
+            Question <span style={{ color: 'var(--status-fail-text)' }}>*</span>
           </label>
           <input
+            id="eval-question"
             type="text"
-            className="form-input"
-            placeholder="e.g., Can the Great Wall of China be seen from the Moon?"
+            className="ink-input"
+            placeholder="What would you like to verify? (e.g. What is photosynthesis?)"
             value={question}
             onChange={(e) => setQuestion(e.target.value)}
+            disabled={loading}
             required
           />
         </div>
 
-        <div className="form-group">
-          <label className="form-label">
-            AI-Generated Response <span className="required-star">*</span>
-            <span className="label-hint">Response to be grounded & checked</span>
+        {/* Section 2: AI Answer */}
+        <div>
+          <label htmlFor="eval-ai-answer" className="ink-label">
+            AI Answer <span style={{ color: 'var(--status-fail-text)' }}>*</span>
           </label>
           <textarea
-            className="form-textarea"
-            placeholder="Paste the model's generated answer here..."
+            id="eval-ai-answer"
+            className="ink-textarea"
+            placeholder="Paste the AI-generated answer here..."
             value={aiResponse}
             onChange={(e) => setAiResponse(e.target.value)}
             rows={4}
+            disabled={loading}
             required
           />
         </div>
 
-        <div className="form-group">
-          <label className="form-label">
-            Reference Answer <span className="label-hint">(Optional ground truth)</span>
-          </label>
-          <textarea
-            className="form-textarea"
-            placeholder="Optional verified answer..."
-            value={referenceAnswer}
-            onChange={(e) => setReferenceAnswer(e.target.value)}
-            rows={2}
-          />
-        </div>
+        {/* Section 3: Optional Reference Information (Collapsible) */}
+        <div
+          style={{
+            border: '1px solid var(--border-subtle)',
+            borderRadius: 'var(--radius-md)',
+            overflow: 'hidden',
+          }}
+        >
+          <button
+            type="button"
+            onClick={() => setShowOptionalRef(!showOptionalRef)}
+            style={{
+              width: '100%',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              padding: '12px 16px',
+              backgroundColor: 'var(--bg-surface-subtle)',
+              border: 'none',
+              cursor: 'pointer',
+              fontSize: '0.88rem',
+              fontWeight: 600,
+              color: 'var(--text-primary)',
+            }}
+          >
+            <span>Optional Reference Information</span>
+            {showOptionalRef ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+          </button>
 
-        <div className="form-group">
-          <label className="form-label">
-            Source Document <span className="label-hint">(Optional TXT / PDF upload or raw text)</span>
-          </label>
-          <textarea
-            className="form-textarea"
-            placeholder="Optional raw source text or upload a document below..."
-            value={sourceDocText}
-            onChange={(e) => setSourceDocText(e.target.value)}
-            rows={2}
-          />
+          {showOptionalRef && (
+            <div style={{ padding: '16px', display: 'flex', flexDirection: 'column', gap: '16px', backgroundColor: 'var(--bg-surface)' }}>
+              <div>
+                <label htmlFor="eval-verified-answer" className="ink-label">
+                  Verified Answer (Optional)
+                </label>
+                <p style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', marginBottom: '6px' }}>
+                  Authoritative reference answer to prioritize over retrieved evidence.
+                </p>
+                <textarea
+                  id="eval-verified-answer"
+                  className="ink-textarea"
+                  style={{ minHeight: '60px' }}
+                  placeholder="Paste verified ground truth answer if available..."
+                  value={referenceAnswer}
+                  onChange={(e) => setReferenceAnswer(e.target.value)}
+                  rows={2}
+                  disabled={loading}
+                />
+              </div>
 
-          {!uploadedFile ? (
-            <div
-              className="file-upload-box"
-              onClick={() => fileInputRef.current?.click()}
-            >
-              <Upload size={20} color="#818CF8" style={{ margin: '0 auto 0.3rem auto' }} />
-              <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
-                {uploading ? 'Extracting text...' : 'Click to attach TXT or PDF document'}
+              <div>
+                <label className="ink-label">Supporting Document (Optional)</label>
+                <p style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', marginBottom: '6px' }}>
+                  Attach a TXT, PDF, or MD document, or paste supporting reference text.
+                </p>
+                <textarea
+                  className="ink-textarea"
+                  style={{ minHeight: '60px', marginBottom: '8px' }}
+                  placeholder="Paste reference text here, or attach a document below..."
+                  value={sourceDocText}
+                  onChange={(e) => setSourceDocText(e.target.value)}
+                  rows={2}
+                  disabled={loading}
+                />
+
+                {!uploadedFile ? (
+                  <div
+                    onClick={() => fileInputRef.current?.click()}
+                    style={{
+                      border: '1px dashed var(--border-color)',
+                      borderRadius: 'var(--radius-md)',
+                      padding: '12px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: '8px',
+                      cursor: 'pointer',
+                      fontSize: '0.82rem',
+                      color: 'var(--text-secondary)',
+                      backgroundColor: 'var(--bg-surface-subtle)',
+                    }}
+                  >
+                    <Upload size={16} />
+                    <span>{uploading ? 'Extracting document text...' : 'Click to attach reference document (TXT, PDF)'}</span>
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      accept=".txt,.pdf,.md"
+                      style={{ display: 'none' }}
+                      onChange={handleFileUpload}
+                      disabled={loading || uploading}
+                    />
+                  </div>
+                ) : (
+                  <div
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      padding: '8px 12px',
+                      backgroundColor: 'var(--bg-surface-subtle)',
+                      border: '1px solid var(--border-subtle)',
+                      borderRadius: 'var(--radius-sm)',
+                      fontSize: '0.82rem',
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <FileText size={16} style={{ color: 'var(--accent-primary)' }} />
+                      <span><strong>{uploadedFile.name}</strong> ({uploadedFile.words} words parsed)</span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={removeUploadedFile}
+                      style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)' }}
+                    >
+                      <X size={15} />
+                    </button>
+                  </div>
+                )}
+                {uploadError && (
+                  <span style={{ fontSize: '0.78rem', color: 'var(--status-fail-text)', marginTop: '4px', display: 'block' }}>
+                    {uploadError}
+                  </span>
+                )}
               </div>
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept=".txt,.pdf,.md"
-                style={{ display: 'none' }}
-                onChange={handleFileUpload}
-              />
-            </div>
-          ) : (
-            <div className="uploaded-file-info">
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                <FileText size={16} color="#818CF8" />
-                <span><strong>{uploadedFile.name}</strong> ({uploadedFile.words} words extracted)</span>
-              </div>
-              <button
-                type="button"
-                onClick={removeUploadedFile}
-                style={{ background: 'transparent', border: 'none', color: '#F43F5E', cursor: 'pointer' }}
-              >
-                <X size={16} />
-              </button>
             </div>
           )}
         </div>
 
-        <div className="form-group" style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-          <label className="form-label" style={{ margin: 0 }}>
-            Retrieved Evidence Chunks (Top-K):
+        {/* Section 4: Knowledge Source */}
+        <div>
+          <label htmlFor="eval-knowledge-source" className="ink-label">
+            Knowledge Source
           </label>
           <select
-            className="form-input"
-            style={{ width: '90px', padding: '0.4rem 0.6rem' }}
-            value={topK}
-            onChange={(e) => setTopK(e.target.value)}
+            id="eval-knowledge-source"
+            className="ink-select"
+            value={datasetFilter}
+            onChange={(e) => setDatasetFilter(e.target.value)}
+            disabled={loading}
           >
-            <option value="3">3</option>
-            <option value="5">5</option>
-            <option value="8">8</option>
-            <option value="10">10</option>
+            <option value="All Knowledge">All Knowledge (TruthfulQA + SQuAD)</option>
+            <option value="TruthfulQA">TruthfulQA Benchmark</option>
+            <option value="SQuAD">SQuAD Encyclopedic Reference</option>
+            <option value="Custom Documents">Custom Documents Only</option>
           </select>
         </div>
 
-        <button
-          type="submit"
-          className="btn-primary"
-          disabled={loading || !question.trim() || !aiResponse.trim()}
-        >
-          {loading ? 'Retrieving Evidence...' : 'Retrieve & Validate Evidence'}
-        </button>
+        {/* Loading Stages Display */}
+        {loading && (
+          <div className="loading-box" style={{ padding: '24px 16px', backgroundColor: 'var(--bg-surface-subtle)', borderRadius: 'var(--radius-md)' }}>
+            <div className="loading-spinner" />
+            <div className="loading-title">Analyzing AI response...</div>
+            <div className="loading-subtitle">Cross-checking claims and evaluating factual grounding</div>
+
+            <div className="loading-stages-list">
+              <div className={`stage-item ${loadingStage >= 1 ? 'completed' : 'active'}`}>
+                {loadingStage >= 1 ? <Check size={14} /> : <span style={{ width: 14 }}>●</span>}
+                <span>Input validated</span>
+              </div>
+              <div className={`stage-item ${loadingStage >= 2 ? 'completed' : loadingStage === 1 ? 'active' : ''}`}>
+                {loadingStage >= 2 ? <Check size={14} /> : <span style={{ width: 14 }}>●</span>}
+                <span>Evidence retrieved</span>
+              </div>
+              <div className={`stage-item ${loadingStage >= 3 ? 'completed' : loadingStage === 2 ? 'active' : ''}`}>
+                {loadingStage >= 3 ? <Check size={14} /> : <span style={{ width: 14 }}>●</span>}
+                <span>Evaluating relevance</span>
+              </div>
+              <div className={`stage-item ${loadingStage >= 4 ? 'completed' : loadingStage === 3 ? 'active' : ''}`}>
+                {loadingStage >= 4 ? <Check size={14} /> : <span style={{ width: 14 }}>●</span>}
+                <span>Checking accuracy</span>
+              </div>
+              <div className={`stage-item ${loadingStage >= 5 ? 'completed' : loadingStage === 4 ? 'active' : ''}`}>
+                {loadingStage >= 5 ? <Check size={14} /> : <span style={{ width: 14 }}>●</span>}
+                <span>Checking unsupported claims</span>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Submit Button */}
+        <div>
+          <button
+            type="submit"
+            id="evaluate-response-btn"
+            className="btn-primary"
+            style={{ width: '100%', padding: '14px', fontSize: '1rem' }}
+            disabled={loading || !question.trim() || !aiResponse.trim()}
+          >
+            <ShieldCheck size={18} />
+            <span>{loading ? 'Verifying Response...' : 'Verify Response'}</span>
+          </button>
+        </div>
       </form>
     </div>
   );
