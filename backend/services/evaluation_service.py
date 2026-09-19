@@ -59,10 +59,12 @@ class EvaluationService:
         relevance = eval_output.get("relevance", {})
         accuracy = eval_output.get("accuracy", {})
         hallucination = eval_output.get("hallucination", {})
+        completeness = eval_output.get("completeness", {})
         overall = eval_output.get("overall", {})
+        verdict_details = eval_output.get("verdict_details", {})
 
         overall_score = overall.get("overall_score", 0)
-        verdict = overall.get("verdict", "REVIEW")
+        verdict = overall.get("verdict", "NEEDS IMPROVEMENT")
         verdict_reasoning = overall.get("verdict_reasoning", "")
 
         # Convert evidence to Pydantic models
@@ -142,6 +144,8 @@ class EvaluationService:
             relevance_score=relevance.get("score"),
             accuracy_score=accuracy.get("score"),
             hallucination_risk=hallucination.get("risk_level"),
+            completeness_score=completeness.get("score"),
+            verdict_details=verdict_details,
             evaluation_result=eval_output,
         )
 
@@ -165,6 +169,8 @@ class EvaluationService:
             relevance=relevance,
             accuracy=accuracy,
             hallucination=hallucination,
+            completeness=completeness,
+            verdict_details=verdict_details,
             status="completed",
             created_at=saved_record["created_at"],
             notice="AI Response Validation active across reference knowledge base.",

@@ -39,10 +39,25 @@ export default function ReportsView({ currentEvaluation, historyList = [], onSel
     );
   }
 
-  const accuracy = evalItem.accuracy || {};
-  const relevance = evalItem.relevance || {};
-  const hallucination = evalItem.hallucination || {};
-  const evidence = evalItem.retrieved_evidence || [];
+  const accuracy = evalItem.accuracy || (evalItem.evaluation_result ? evalItem.evaluation_result.accuracy : {}) || {};
+  const relevance = evalItem.relevance || (evalItem.evaluation_result ? evalItem.evaluation_result.relevance : {}) || {};
+  const hallucination = evalItem.hallucination || (evalItem.evaluation_result ? evalItem.evaluation_result.hallucination : {}) || {};
+  const completeness = evalItem.completeness || (evalItem.evaluation_result ? evalItem.evaluation_result.completeness : {}) || {};
+  const evidence = evalItem.retrieved_evidence || (evalItem.evaluation_result ? evalItem.evaluation_result.retrieved_evidence : []) || [];
+  const verdictDetails = evalItem.verdict_details || (evalItem.evaluation_result ? evalItem.evaluation_result.verdict_details : {}) || {};
+
+  const majorStrengths = verdictDetails.major_strengths || [];
+  const majorIssues = verdictDetails.major_issues || [];
+  const criticalOverrideApplied = verdictDetails.critical_override_applied || evalItem.critical_override_applied || verdictDetails.critical_issues_detected;
+  const criticalOverrideReason = verdictDetails.critical_override_reason || evalItem.critical_override_reason || '';
+  const flaggedClaims = hallucination.flagged_claims || [];
+  const missingAspects = completeness.missing_aspects || [];
+  const addressedAspects = completeness.addressed_aspects || [];
+
+  const accScore = accuracy.score !== undefined ? accuracy.score : (evalItem.accuracy_score ?? 0);
+  const relScore = relevance.score !== undefined ? relevance.score : (evalItem.relevance_score ?? 0);
+  const compScore = completeness.score !== undefined ? completeness.score : (evalItem.completeness_score ?? 0);
+  const halRisk = hallucination.risk_level || evalItem.hallucination_risk || 'LOW';
 
   return (
     <div className="reports-container">
@@ -91,10 +106,10 @@ export default function ReportsView({ currentEvaluation, historyList = [], onSel
         <div style={{ borderBottom: '2px solid var(--text-primary)', paddingBottom: '16px', marginBottom: '24px', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
           <div>
             <h1 style={{ fontSize: '1.4rem', fontWeight: 800, color: 'var(--text-primary)' }}>
-              VERIRAG AUDIT REPORT
+              PROOFRAG AUDIT REPORT
             </h1>
             <p style={{ fontSize: '0.82rem', color: 'var(--text-secondary)' }}>
-              AI Response Validation & Evidence Platform
+              Evidence-Grounded AI Response Verification & Evaluation Engine
             </p>
           </div>
           <div style={{ textAlign: 'right', fontSize: '0.78rem', color: 'var(--text-muted)' }}>
@@ -103,12 +118,33 @@ export default function ReportsView({ currentEvaluation, historyList = [], onSel
           </div>
         </div>
 
-        {/* Executive Verdict Block */}
+        {/* Critical Override Alert if Triggered */}
+        {criticalOverrideApplied && (
+          <div
+            style={{
+              backgroundColor: 'var(--status-fail-bg)',
+              border: '1px solid var(--status-fail-border)',
+              borderRadius: 'var(--radius-sm)',
+              padding: '12px 16px',
+              marginBottom: '20px',
+              color: 'var(--status-fail-text)',
+            }}
+          >
+            <strong style={{ fontSize: '0.86rem', display: 'block', marginBottom: '2px' }}>
+              CRITICAL OVERRIDE: TRIGGERED
+            </strong>
+            <span style={{ fontSize: '0.82rem' }}>
+              {criticalOverrideReason || 'A critical issue (severe contradiction or low accuracy) forced a non-passing verdict.'}
+            </span>
+          </div>
+        )}
+
+        {/* Executive Verdict Block: All 4 M3 Dimensions */}
         <div
           style={{
             display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))',
-            gap: '16px',
+            gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))',
+            gap: '14px',
             backgroundColor: 'var(--bg-surface-subtle)',
             padding: '20px',
             borderRadius: 'var(--radius-md)',
@@ -117,47 +153,68 @@ export default function ReportsView({ currentEvaluation, historyList = [], onSel
           }}
         >
           <div>
-            <span style={{ fontSize: '0.72rem', textTransform: 'uppercase', fontWeight: 700, color: 'var(--text-muted)' }}>
+            <span style={{ fontSize: '0.7rem', textTransform: 'uppercase', fontWeight: 700, color: 'var(--text-muted)' }}>
+              1. Accuracy (35%)
+            </span>
+            <div style={{ fontSize: '1.3rem', fontWeight: 700, marginTop: '4px' }}>
+              {accScore} / 5
+            </div>
+          </div>
+
+          <div>
+            <span style={{ fontSize: '0.7rem', textTransform: 'uppercase', fontWeight: 700, color: 'var(--text-muted)' }}>
+              2. Relevance (20%)
+            </span>
+            <div style={{ fontSize: '1.3rem', fontWeight: 700, marginTop: '4px' }}>
+              {relScore} / 5
+            </div>
+          </div>
+
+          <div>
+            <span style={{ fontSize: '0.7rem', textTransform: 'uppercase', fontWeight: 700, color: 'var(--text-muted)' }}>
+              3. Hallucination (30%)
+            </span>
+            <div
+              style={{
+                fontSize: '1.15rem',
+                fontWeight: 700,
+                marginTop: '4px',
+                color:
+                  halRisk === 'HIGH'
+                    ? 'var(--status-fail-text)'
+                    : halRisk === 'MEDIUM'
+                    ? 'var(--status-review-text)'
+                    : 'var(--status-pass-text)',
+              }}
+            >
+              {halRisk} RISK
+            </div>
+          </div>
+
+          <div>
+            <span style={{ fontSize: '0.7rem', textTransform: 'uppercase', fontWeight: 700, color: 'var(--text-muted)' }}>
+              4. Completeness (15%)
+            </span>
+            <div style={{ fontSize: '1.3rem', fontWeight: 700, marginTop: '4px' }}>
+              {compScore} / 5
+            </div>
+          </div>
+
+          <div style={{ borderLeft: '1px solid var(--border-subtle)', paddingLeft: '14px' }}>
+            <span style={{ fontSize: '0.7rem', textTransform: 'uppercase', fontWeight: 700, color: 'var(--text-muted)' }}>
               Overall Score
             </span>
-            <div style={{ fontSize: '1.8rem', fontWeight: 800, color: 'var(--text-primary)' }}>
+            <div style={{ fontSize: '1.5rem', fontWeight: 800, color: 'var(--text-primary)', marginTop: '2px' }}>
               {evalItem.overall_score || 0} / 100
             </div>
           </div>
 
           <div>
-            <span style={{ fontSize: '0.72rem', textTransform: 'uppercase', fontWeight: 700, color: 'var(--text-muted)' }}>
+            <span style={{ fontSize: '0.7rem', textTransform: 'uppercase', fontWeight: 700, color: 'var(--text-muted)' }}>
               Final Verdict
             </span>
-            <div style={{ fontSize: '1.3rem', fontWeight: 800, marginTop: '4px' }}>
-              {evalItem.verdict || 'REVIEW'}
-            </div>
-          </div>
-
-          <div>
-            <span style={{ fontSize: '0.72rem', textTransform: 'uppercase', fontWeight: 700, color: 'var(--text-muted)' }}>
-              Accuracy Score
-            </span>
-            <div style={{ fontSize: '1.3rem', fontWeight: 700, marginTop: '4px' }}>
-              {accuracy.score || evalItem.accuracy_score || 0} / 5
-            </div>
-          </div>
-
-          <div>
-            <span style={{ fontSize: '0.72rem', textTransform: 'uppercase', fontWeight: 700, color: 'var(--text-muted)' }}>
-              Relevance Score
-            </span>
-            <div style={{ fontSize: '1.3rem', fontWeight: 700, marginTop: '4px' }}>
-              {relevance.score || evalItem.relevance_score || 0} / 5
-            </div>
-          </div>
-
-          <div>
-            <span style={{ fontSize: '0.72rem', textTransform: 'uppercase', fontWeight: 700, color: 'var(--text-muted)' }}>
-              Hallucination Risk
-            </span>
-            <div style={{ fontSize: '1.3rem', fontWeight: 700, marginTop: '4px' }}>
-              {hallucination.risk_level || evalItem.hallucination_risk || 'LOW'}
+            <div style={{ fontSize: '1.25rem', fontWeight: 800, marginTop: '4px' }}>
+              {evalItem.verdict || 'NEEDS IMPROVEMENT'}
             </div>
           </div>
         </div>
@@ -181,29 +238,123 @@ export default function ReportsView({ currentEvaluation, historyList = [], onSel
           </div>
         </div>
 
+        {/* Major Strengths & Issues */}
+        {(majorStrengths.length > 0 || majorIssues.length > 0) && (
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '16px', marginBottom: '24px' }}>
+            <div style={{ padding: '14px', backgroundColor: 'var(--status-pass-bg)', border: '1px solid var(--status-pass-border)', borderRadius: 'var(--radius-sm)' }}>
+              <strong style={{ fontSize: '0.82rem', color: 'var(--status-pass-text)', display: 'block', marginBottom: '6px' }}>
+                Major Strengths
+              </strong>
+              {majorStrengths.length > 0 ? (
+                <ul style={{ margin: '0 0 0 16px', fontSize: '0.82rem', color: 'var(--status-pass-text)' }}>
+                  {majorStrengths.map((s, i) => (
+                    <li key={i}>{s}</li>
+                  ))}
+                </ul>
+              ) : (
+                <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>None recorded.</span>
+              )}
+            </div>
+
+            <div style={{ padding: '14px', backgroundColor: 'var(--status-fail-bg)', border: '1px solid var(--status-fail-border)', borderRadius: 'var(--radius-sm)' }}>
+              <strong style={{ fontSize: '0.82rem', color: 'var(--status-fail-text)', display: 'block', marginBottom: '6px' }}>
+                Major Issues & Critical Flags
+              </strong>
+              {majorIssues.length > 0 ? (
+                <ul style={{ margin: '0 0 0 16px', fontSize: '0.82rem', color: 'var(--status-fail-text)' }}>
+                  {majorIssues.map((issue, i) => (
+                    <li key={i}>{issue}</li>
+                  ))}
+                </ul>
+              ) : (
+                <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>No critical issues detected.</span>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Claim-Level Grounding Findings */}
+        {flaggedClaims.length > 0 && (
+          <div style={{ marginBottom: '24px' }}>
+            <h3 style={{ fontSize: '0.95rem', fontWeight: 700, marginBottom: '8px', borderBottom: '1px solid var(--border-subtle)', paddingBottom: '4px' }}>
+              Claim-Level Grounding Breakdown ({flaggedClaims.length} Claims)
+            </h3>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+              {flaggedClaims.map((c, idx) => (
+                <div key={idx} style={{ padding: '10px 14px', backgroundColor: 'var(--bg-surface-subtle)', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border-subtle)', fontSize: '0.82rem' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
+                    <span style={{ fontWeight: 700 }}>Claim {idx + 1}: "{c.claim}"</span>
+                    <span
+                      style={{
+                        fontWeight: 700,
+                        fontSize: '0.72rem',
+                        textTransform: 'uppercase',
+                        color:
+                          c.status === 'SUPPORTED'
+                            ? 'var(--status-pass-text)'
+                            : c.status === 'CONTRADICTED'
+                            ? 'var(--status-fail-text)'
+                            : 'var(--status-review-text)',
+                      }}
+                    >
+                      {c.status}
+                    </span>
+                  </div>
+                  {c.reasoning && <div style={{ color: 'var(--text-secondary)' }}>Reason: {c.reasoning}</div>}
+                  {c.evidence && <div style={{ color: 'var(--text-muted)', fontStyle: 'italic', marginTop: '2px' }}>Evidence: "{c.evidence}"</div>}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Completeness Aspects */}
+        {(missingAspects.length > 0 || addressedAspects.length > 0) && (
+          <div style={{ marginBottom: '24px' }}>
+            <h3 style={{ fontSize: '0.95rem', fontWeight: 700, marginBottom: '8px', borderBottom: '1px solid var(--border-subtle)', paddingBottom: '4px' }}>
+              Completeness Coverage Analysis
+            </h3>
+            <div style={{ fontSize: '0.82rem' }}>
+              {addressedAspects.length > 0 && (
+                <div style={{ marginBottom: '6px' }}>
+                  <strong>Addressed Aspects: </strong>
+                  <span>{addressedAspects.join('; ')}</span>
+                </div>
+              )}
+              {missingAspects.length > 0 && (
+                <div style={{ color: 'var(--status-fail-text)' }}>
+                  <strong>Missing / Omitted Aspects: </strong>
+                  <span>{missingAspects.join('; ')}</span>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
         {/* Reasoning and Findings */}
         <div style={{ marginBottom: '24px' }}>
           <h3 style={{ fontSize: '0.95rem', fontWeight: 700, marginBottom: '8px', borderBottom: '1px solid var(--border-subtle)', paddingBottom: '4px' }}>
-            Findings & Justifications
+            Agent Reasoning & Justifications
           </h3>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '0.84rem' }}>
-            <div><strong>Verdict Reasoning: </strong>{evalItem.verdict_reasoning || 'Based on multi-agent synthesis.'}</div>
+            <div><strong>Consolidated Verdict: </strong>{evalItem.verdict_reasoning || 'Based on 4-dimension multi-agent synthesis.'}</div>
             <div><strong>Accuracy Reasoning: </strong>{accuracy.reasoning || 'Evaluated against reference knowledge.'}</div>
             <div><strong>Relevance Reasoning: </strong>{relevance.reasoning || 'Evaluated against question intent.'}</div>
             <div><strong>Hallucination Summary: </strong>{hallucination.summary || 'Analyzed claim-by-claim.'}</div>
+            <div><strong>Completeness Reasoning: </strong>{completeness.reasoning || 'Coverage evaluated across question requirements.'}</div>
           </div>
         </div>
 
         {/* Evidence Sources */}
         <div>
           <h3 style={{ fontSize: '0.95rem', fontWeight: 700, marginBottom: '8px', borderBottom: '1px solid var(--border-subtle)', paddingBottom: '4px' }}>
-            Retrieved Evidence ({evidence.length} sources)
+            Evidence Used ({evidence.length} sources)
           </h3>
           {evidence.length === 0 ? (
             <p style={{ fontSize: '0.82rem', color: 'var(--text-muted)' }}>No reference evidence chunks logged.</p>
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-              {evidence.slice(0, 3).map((e, idx) => (
+              {evidence.slice(0, 4).map((e, idx) => (
                 <div key={idx} style={{ padding: '10px 14px', backgroundColor: 'var(--bg-surface-subtle)', borderRadius: 'var(--radius-sm)', fontSize: '0.82rem' }}>
                   <div style={{ fontWeight: 700, color: 'var(--text-primary)', marginBottom: '4px' }}>
                     #{idx + 1} [{e.dataset_name || 'Knowledge Base'}] — Match Strength: {Math.round((e.similarity_score || 0) * 100)}%

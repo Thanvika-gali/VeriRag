@@ -1,12 +1,19 @@
 """ChromaDB Vector Store management for VeriRAG."""
 
 import os
+from pathlib import Path
 from typing import Any, Dict, List, Optional
 import chromadb
 from chromadb.config import Settings
 
+# Anchor path to project root (parent of backend/)
+PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
+_env_persist = os.getenv("CHROMADB_PERSIST_DIR", "chromadb_data")
+_persist_path = Path(_env_persist)
+if not _persist_path.is_absolute():
+    _persist_path = PROJECT_ROOT / _persist_path
+DEFAULT_PERSIST_DIR = str(_persist_path)
 
-DEFAULT_PERSIST_DIR = os.getenv("CHROMADB_PERSIST_DIR", "chromadb_data")
 DEFAULT_COLLECTION_NAME = "verirag_knowledge_base"
 
 
@@ -15,10 +22,14 @@ class VectorStoreManager:
 
     def __init__(
         self,
-        persist_dir: str = DEFAULT_PERSIST_DIR,
+        persist_dir: Optional[str] = None,
         collection_name: str = DEFAULT_COLLECTION_NAME,
     ):
-        self.persist_dir = persist_dir
+        if persist_dir:
+            p = Path(persist_dir)
+            self.persist_dir = str(p if p.is_absolute() else PROJECT_ROOT / p)
+        else:
+            self.persist_dir = DEFAULT_PERSIST_DIR
         self.collection_name = collection_name
         self._client: Optional[chromadb.PersistentClient] = None
         self._collection = None

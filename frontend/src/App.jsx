@@ -10,6 +10,7 @@ import AnalyticsView from './components/AnalyticsView';
 import ReportsView from './components/ReportsView';
 import SystemStatusView from './components/SystemStatusView';
 import SettingsModal from './components/SettingsModal';
+import BatchVerifyView from './components/BatchVerifyView';
 import { Database, ShieldCheck, Cpu, Moon, Sun } from 'lucide-react';
 
 export default function App() {
@@ -148,6 +149,7 @@ export default function App() {
     verify: 'Verify Response',
     evaluate: 'Verify Response',
     dashboard: 'Verify Response',
+    'batch-verify': 'Batch Verify',
     history: 'Evaluation History',
     'evidence-library': 'Evidence Library',
     'data-sources': 'Data Sources',
@@ -212,7 +214,7 @@ export default function App() {
               <Database size={13} style={{ color: 'var(--accent-primary)' }} />
               <span>Chunks:</span>
               <strong style={{ color: 'var(--text-primary)' }}>
-                {systemHealth?.total_indexed_chunks !== undefined ? systemHealth.total_indexed_chunks : '543'}
+                {systemHealth?.total_indexed_chunks !== undefined ? systemHealth.total_indexed_chunks : '—'}
               </strong>
             </div>
           </div>
@@ -238,6 +240,10 @@ export default function App() {
                 />
               </section>
             </div>
+          )}
+
+          {activePage === 'batch-verify' && (
+            <BatchVerifyView />
           )}
 
           {activePage === 'history' && (

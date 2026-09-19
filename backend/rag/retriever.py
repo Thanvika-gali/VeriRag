@@ -148,8 +148,10 @@ class EvidenceRetriever:
                 item["match_tier"] = "strong"
             elif sim >= MODERATE_MATCH_THRESHOLD:
                 item["match_tier"] = "moderate"
-            else:
+            elif sim >= 0.35:
                 item["match_tier"] = "weak"
+            else:
+                item["match_tier"] = "irrelevant"
 
             # Strict relevance filter:
             # - Strong match (>= 0.65) is direct evidence if it doesn't contradict discriminating terms

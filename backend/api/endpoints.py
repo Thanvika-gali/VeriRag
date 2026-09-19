@@ -5,6 +5,9 @@ from typing import Any, Dict, List, Optional
 from fastapi import APIRouter, File, HTTPException, Query, UploadFile, status
 from backend.api.schemas import (
     AnalyticsResponse,
+    BatchEvaluationResult,
+    BatchJobListItem,
+    BatchValidationPreview,
     DatasetInfo,
     DocumentUploadResponse,
     EvaluationSubmissionRequest,
@@ -15,31 +18,52 @@ from backend.api.schemas import (
     SubmissionListItem,
 )
 from backend.database.sqlite_db import db_instance
+from backend.rag.retriever import retriever
 from backend.rag.vector_store import vector_store
+from backend.services.batch_service import batch_evaluation_service
 from backend.services.doc_parser import DocumentParser
 from backend.services.evaluation_service import evaluation_service
+from evaluation.orchestrator import evaluation_orchestrator
 
 router = APIRouter(prefix="/api", tags=["Evaluation & Knowledge Base"])
 
 
 @router.get("/health", response_model=HealthResponse)
 def health_check():
-    """System health check reporting database and vector store status."""
+    """System health check reporting database, vector store, and multi-agent subsystem status."""
     db_connected = True
     try:
         db_instance.list_submissions(limit=1)
     except Exception:
         db_connected = False
 
-    total_chunks = vector_store.count()
+    vec_ready = True
+    total_chunks = 0
+    try:
+        total_chunks = vector_store.count()
+    except Exception:
+        vec_ready = False
+
+    agent_statuses = {
+        "RAG / Evidence Retrieval": "ONLINE" if (retriever is not None and vec_ready) else "OFFLINE",
+        "Relevance Judge Agent": "ONLINE" if (evaluation_orchestrator and evaluation_orchestrator.relevance_judge) else "OFFLINE",
+        "Accuracy Judge Agent": "ONLINE" if (evaluation_orchestrator and evaluation_orchestrator.accuracy_judge) else "OFFLINE",
+        "Hallucination Detection Agent": "ONLINE" if (evaluation_orchestrator and evaluation_orchestrator.hallucination_judge) else "OFFLINE",
+        "Completeness Judge Agent": "ONLINE" if (evaluation_orchestrator and evaluation_orchestrator.completeness_judge) else "OFFLINE",
+        "Verdict Agent": "ONLINE" if (evaluation_orchestrator and evaluation_orchestrator.verdict_agent) else "OFFLINE",
+        "Evaluation Orchestrator": "ONLINE" if evaluation_orchestrator else "OFFLINE",
+        "Batch Evaluation": "ONLINE" if batch_evaluation_service else "OFFLINE",
+    }
+
     return HealthResponse(
         status="ok",
         version="2.0.0",
         database_connected=db_connected,
-        vector_store_ready=True,
+        vector_store_ready=vec_ready,
         total_indexed_chunks=total_chunks,
         embedding_model="all-MiniLM-L6-v2",
         timestamp=datetime.now(timezone.utc).isoformat(),
+        agent_statuses=agent_statuses,
     )
 
 
@@ -120,12 +144,14 @@ def get_submission(submission_id: str):
     relevance = eval_data.get("relevance", {})
     accuracy = eval_data.get("accuracy", {})
     hallucination = eval_data.get("hallucination", {})
+    completeness = eval_data.get("completeness", {})
+    verdict_details = sub.get("verdict_details") or eval_data.get("verdict_details", {})
 
     top_sim = max([e.similarity_score for e in evidence_items], default=0.0)
 
     # Fallback to stored columns if eval_data dict is empty
     overall_score = sub.get("overall_score") or overall.get("overall_score") or 0
-    verdict = sub.get("verdict") or overall.get("verdict") or "REVIEW"
+    verdict = sub.get("verdict") or overall.get("verdict") or "NEEDS IMPROVEMENT"
     verdict_reasoning = overall.get("verdict_reasoning") or ""
 
     if not relevance and sub.get("relevance_score") is not None:
@@ -134,6 +160,8 @@ def get_submission(submission_id: str):
         accuracy = {"score": sub["accuracy_score"], "label": f"{sub['accuracy_score']}/5", "reasoning": "Retrieved from archive", "supporting_evidence": []}
     if not hallucination and sub.get("hallucination_risk") is not None:
         hallucination = {"hallucination_status": "NONE" if sub["hallucination_risk"] == "LOW" else "PARTIAL", "risk_level": sub["hallucination_risk"], "flagged_claims": [], "summary": "Retrieved from archive"}
+    if not completeness and sub.get("completeness_score") is not None:
+        completeness = {"score": sub["completeness_score"], "status": "COMPLETE" if sub["completeness_score"] >= 4 else "PARTIAL" if sub["completeness_score"] == 3 else "INCOMPLETE", "addressed_aspects": [], "missing_aspects": [], "reasoning": "Retrieved from archive"}
 
     return EvaluationSubmissionResponse(
         success=True,
@@ -153,6 +181,8 @@ def get_submission(submission_id: str):
         relevance=relevance,
         accuracy=accuracy,
         hallucination=hallucination,
+        completeness=completeness,
+        verdict_details=verdict_details,
         status=sub["status"],
         created_at=sub["created_at"],
     )
@@ -200,10 +230,15 @@ def get_knowledge_base_stats():
     except Exception:
         custom_count = 0
 
-    # Ensure counts reconcile
+    # Ensure counts reconcile dynamically from actual collection metadata
     if total_chunks > 0 and tqa_count == 0 and squad_count == 0:
-        tqa_count = 160
-        squad_count = total_chunks - tqa_count
+        try:
+            all_meta = vector_store.collection.get().get("metadatas", []) or []
+            tqa_count = sum(1 for m in all_meta if m and m.get("dataset_name") == "TruthfulQA")
+            squad_count = sum(1 for m in all_meta if m and m.get("dataset_name") == "SQuAD")
+            custom_count = sum(1 for m in all_meta if m and m.get("dataset_name") == "Custom")
+        except Exception:
+            pass
 
     datasets = [
         DatasetInfo(
@@ -388,5 +423,117 @@ def search_evidence(
         "results_count": len(enriched_results),
         "results": enriched_results,
     }
+
+
+# ==============================================================================
+# Milestone 3 — Batch Evaluation Endpoints
+# ==============================================================================
+
+@router.post(
+    "/batch/validate",
+    response_model=BatchValidationPreview,
+    status_code=status.HTTP_200_OK,
+    summary="Validate and preview batch CSV before execution",
+)
+async def validate_batch_csv(file: UploadFile = File(...)):
+    """Parse and pre-validate CSV columns, normalize headers, and return preview rows."""
+    filename = file.filename or "batch_upload.csv"
+    if not filename.lower().endswith((".csv", ".txt")):
+        return BatchValidationPreview(
+            is_valid=False,
+            filename=filename,
+            total_rows=0,
+            valid_rows_count=0,
+            invalid_rows_count=0,
+            error_message="Invalid file format. Please upload a CSV file (.csv).",
+        )
+
+    try:
+        raw_bytes = await file.read()
+        return batch_evaluation_service.validate_csv_preview(raw_bytes, filename=filename)
+    except Exception as exc:
+        return BatchValidationPreview(
+            is_valid=False,
+            filename=filename,
+            total_rows=0,
+            valid_rows_count=0,
+            invalid_rows_count=0,
+            error_message=f"Unable to read or parse CSV: {str(exc)}",
+        )
+
+
+@router.post(
+    "/batch/evaluate",
+    response_model=BatchEvaluationResult,
+    status_code=status.HTTP_200_OK,
+    summary="Upload CSV for batch AI response verification",
+)
+async def evaluate_batch_csv(
+    file: UploadFile = File(...),
+    dataset_filter: Optional[str] = Query(default=None),
+    top_k: int = Query(default=5, ge=1, le=20),
+):
+    """Parse CSV, validate columns and rows, and execute complete verification pipeline for each record."""
+    filename = file.filename or "batch_upload.csv"
+    if not filename.lower().endswith((".csv", ".txt")):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid file format. Please upload a CSV file (.csv).",
+        )
+
+    try:
+        raw_bytes = await file.read()
+        if not raw_bytes:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Uploaded file is empty.",
+            )
+
+        result = batch_evaluation_service.execute_batch(
+            raw_bytes=raw_bytes,
+            filename=filename,
+            dataset_filter=dataset_filter,
+            top_k=top_k,
+        )
+        return result
+    except HTTPException:
+        raise
+    except Exception as exc:
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Batch evaluation failure: {str(exc)}",
+        ) from exc
+
+
+@router.get(
+    "/batch/{batch_id}",
+    response_model=BatchEvaluationResult,
+    summary="Retrieve batch evaluation results by ID",
+)
+def get_batch_results(batch_id: str):
+    """Retrieve full batch evaluation summary, statistics, and individual records."""
+    batch_res = batch_evaluation_service.get_batch_result(batch_id)
+    if not batch_res:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Batch evaluation job '{batch_id}' not found.",
+        )
+    return batch_res
+
+
+@router.get(
+    "/batch",
+    response_model=List[BatchJobListItem],
+    summary="List past batch evaluation jobs",
+)
+def list_batch_jobs(
+    limit: int = Query(default=20, ge=1, le=50),
+    offset: int = Query(default=0, ge=0),
+):
+    """Retrieve history of batch evaluation jobs."""
+    return db_instance.list_batch_jobs(limit=limit, offset=offset)
+
 
 

@@ -57,14 +57,95 @@ class HallucinationResult(BaseModel):
     )
 
 
+class CompletenessResult(BaseModel):
+    """Structured result from Completeness Judge Agent (1-5 scale)."""
+    score: int = Field(..., ge=1, le=5, description="1 to 5 completeness score.")
+    status: Literal["COMPLETE", "PARTIAL", "INCOMPLETE"] = Field(
+        ...,
+        description="Categorical completeness status: COMPLETE | PARTIAL | INCOMPLETE",
+    )
+    addressed_aspects: List[str] = Field(
+        default_factory=list,
+        description="Aspects and sub-questions adequately covered by the response.",
+    )
+    missing_aspects: List[str] = Field(
+        default_factory=list,
+        description="Unaddressed aspects, unanswered sub-questions, or insufficient details.",
+    )
+    reasoning: str = Field(..., description="Detailed explanation of the completeness evaluation.")
+
+
+class VerdictResult(BaseModel):
+    """Structured synthesis result from Verdict Agent."""
+    overall_score: int = Field(..., ge=0, le=100, description="Weighted aggregated score from 0 to 100.")
+    verdict: Literal["PASS", "NEEDS IMPROVEMENT", "FAIL", "REVIEW"] = Field(
+        ...,
+        description="Final verdict: PASS, NEEDS IMPROVEMENT, or FAIL.",
+    )
+    dimension_scores: Dict[str, Any] = Field(
+        default_factory=dict,
+        description="Raw scores for all 4 dimensions.",
+    )
+    normalized_scores: Dict[str, float] = Field(
+        default_factory=dict,
+        description="Normalized 0.0 to 1.0 scores for each dimension.",
+    )
+    weighted_contributions: Dict[str, float] = Field(
+        default_factory=dict,
+        description="Points contributed by each dimension to the overall score.",
+    )
+    weights: Dict[str, float] = Field(
+        default_factory=dict,
+        description="Configured weights used for aggregation.",
+    )
+    major_strengths: List[str] = Field(
+        default_factory=list,
+        description="Key positive aspects and grounded strengths identified.",
+    )
+    major_issues: List[str] = Field(
+        default_factory=list,
+        description="Critical issues, contradictions, or significant omissions.",
+    )
+    consolidated_reasoning: str = Field(
+        ...,
+        description="Consolidated reasoning explaining why the final verdict was reached.",
+    )
+    verdict_reasoning: str = Field(
+        default="",
+        description="Alias for consolidated reasoning for backward compatibility.",
+    )
+    critical_issues_detected: bool = Field(
+        default=False,
+        description="Flag indicating if a critical failure prevented a PASS verdict.",
+    )
+    critical_override_applied: bool = Field(
+        default=False,
+        description="Explicit indicator if critical override was triggered.",
+    )
+    critical_override_reason: str = Field(
+        default="",
+        description="Detailed explanation of why critical override was applied.",
+    )
+
+
 class OverallEvaluation(BaseModel):
     """Synthesized evaluation score and transparent verdict."""
     overall_score: int = Field(..., ge=0, le=100, description="Overall weighted score from 0 to 100.")
-    verdict: Literal["PASS", "REVIEW", "FAIL"] = Field(
+    verdict: Literal["PASS", "NEEDS IMPROVEMENT", "REVIEW", "FAIL"] = Field(
         ...,
-        description="Rule-based transparent verdict: PASS, REVIEW, or FAIL.",
+        description="Rule-based transparent verdict: PASS, NEEDS IMPROVEMENT, REVIEW, or FAIL.",
     )
     verdict_reasoning: str = Field(..., description="Transparent explanation of the verdict determination.")
-    accuracy_weight: float = Field(default=0.40, description="Weight assigned to accuracy.")
-    relevance_weight: float = Field(default=0.30, description="Weight assigned to relevance.")
+    accuracy_weight: float = Field(default=0.35, description="Weight assigned to accuracy.")
     hallucination_safety_weight: float = Field(default=0.30, description="Weight assigned to hallucination safety.")
+    relevance_weight: float = Field(default=0.20, description="Weight assigned to relevance.")
+    completeness_weight: float = Field(default=0.15, description="Weight assigned to completeness.")
+    dimension_scores: Dict[str, Any] = Field(default_factory=dict)
+    critical_override_applied: bool = Field(default=False)
+    critical_override_reason: str = Field(default="")
+    normalized_scores: Dict[str, float] = Field(default_factory=dict)
+    weighted_contributions: Dict[str, float] = Field(default_factory=dict)
+    major_strengths: List[str] = Field(default_factory=list)
+    major_issues: List[str] = Field(default_factory=list)
+    consolidated_reasoning: str = Field(default="")
+

@@ -73,13 +73,14 @@ export default function EvaluationForm({
   const fileInputRef = useRef(null);
 
   useEffect(() => {
-    let timer1, timer2, timer3, timer4;
+    let timer1, timer2, timer3, timer4, timer5;
     if (loading) {
       setLoadingStage(1); // input validated
-      timer1 = setTimeout(() => setLoadingStage(2), 600); // evidence retrieved
-      timer2 = setTimeout(() => setLoadingStage(3), 1300); // relevance & accuracy
-      timer3 = setTimeout(() => setLoadingStage(4), 2200); // hallucination check
-      timer4 = setTimeout(() => setLoadingStage(5), 3100); // preparing result
+      timer1 = setTimeout(() => setLoadingStage(2), 500); // evidence retrieved
+      timer2 = setTimeout(() => setLoadingStage(3), 1100); // relevance
+      timer3 = setTimeout(() => setLoadingStage(4), 1800); // accuracy
+      timer4 = setTimeout(() => setLoadingStage(5), 2500); // hallucination detection
+      timer5 = setTimeout(() => setLoadingStage(6), 3200); // completeness & verdict synthesis
     } else {
       setLoadingStage(0);
     }
@@ -88,6 +89,7 @@ export default function EvaluationForm({
       clearTimeout(timer2);
       clearTimeout(timer3);
       clearTimeout(timer4);
+      clearTimeout(timer5);
     };
   }, [loading]);
 
@@ -428,19 +430,23 @@ export default function EvaluationForm({
               </div>
               <div className={`stage-item ${loadingStage >= 2 ? 'completed' : loadingStage === 1 ? 'active' : ''}`}>
                 {loadingStage >= 2 ? <Check size={14} /> : <span style={{ width: 14 }}>●</span>}
-                <span>Evidence retrieved</span>
+                <span>Evidence retrieved (ChromaDB)</span>
               </div>
               <div className={`stage-item ${loadingStage >= 3 ? 'completed' : loadingStage === 2 ? 'active' : ''}`}>
                 {loadingStage >= 3 ? <Check size={14} /> : <span style={{ width: 14 }}>●</span>}
-                <span>Evaluating relevance</span>
+                <span>Evaluating topical relevance</span>
               </div>
               <div className={`stage-item ${loadingStage >= 4 ? 'completed' : loadingStage === 3 ? 'active' : ''}`}>
                 {loadingStage >= 4 ? <Check size={14} /> : <span style={{ width: 14 }}>●</span>}
-                <span>Checking accuracy</span>
+                <span>Checking factual accuracy</span>
               </div>
               <div className={`stage-item ${loadingStage >= 5 ? 'completed' : loadingStage === 4 ? 'active' : ''}`}>
                 {loadingStage >= 5 ? <Check size={14} /> : <span style={{ width: 14 }}>●</span>}
-                <span>Checking unsupported claims</span>
+                <span>Detecting hallucinated assertions</span>
+              </div>
+              <div className={`stage-item ${loadingStage >= 6 ? 'completed' : loadingStage === 5 ? 'active' : ''}`}>
+                {loadingStage >= 6 ? <Check size={14} /> : <span style={{ width: 14 }}>●</span>}
+                <span>Completeness evaluation & verdict synthesis</span>
               </div>
             </div>
           </div>

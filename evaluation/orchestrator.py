@@ -6,24 +6,34 @@ Coordinates complete verification workflow:
 3. Relevance Judge Agent execution
 4. Accuracy Judge Agent execution
 5. Hallucination Detection Agent execution
-6. Transparent Score Aggregation (40% Accuracy, 30% Relevance, 30% Hallucination Safety)
-7. Rule-based Final Verdict synthesis (PASS, REVIEW, FAIL)
+6. Completeness Judge Agent execution (Milestone 3)
+7. Transparent Verdict Agent synthesis with configurable 4-dimension weighted scoring
 """
 
 import logging
 from typing import Any, Dict, List, Optional
+from backend.config import (
+    WEIGHT_ACCURACY,
+    WEIGHT_COMPLETENESS,
+    WEIGHT_HALLUCINATION,
+    WEIGHT_RELEVANCE,
+)
 from backend.rag.retriever import EvidenceRetriever, retriever
 from evaluation.agents.accuracy_judge import AccuracyJudgeAgent, accuracy_judge
+from evaluation.agents.completeness_judge import CompletenessJudgeAgent, completeness_judge
 from evaluation.agents.hallucination_judge import HallucinationDetectionAgent, hallucination_judge
 from evaluation.agents.relevance_judge import RelevanceJudgeAgent, relevance_judge
+from evaluation.agents.verdict_agent import VerdictAgent, verdict_agent
 from evaluation.schemas import (
     AccuracyResult,
+    CompletenessResult,
     HallucinationResult,
     OverallEvaluation,
     RelevanceResult,
+    VerdictResult,
 )
 
-logger = logging.getLogger("verirag.orchestrator")
+logger = logging.getLogger("proofrag.orchestrator")
 
 
 class EvaluationOrchestrator:
@@ -35,18 +45,24 @@ class EvaluationOrchestrator:
         rel_judge: Optional[RelevanceJudgeAgent] = None,
         acc_judge: Optional[AccuracyJudgeAgent] = None,
         hal_judge: Optional[HallucinationDetectionAgent] = None,
-        accuracy_weight: float = 0.40,
-        relevance_weight: float = 0.30,
-        hallucination_weight: float = 0.30,
+        comp_judge: Optional[CompletenessJudgeAgent] = None,
+        v_agent: Optional[VerdictAgent] = None,
+        accuracy_weight: Optional[float] = None,
+        relevance_weight: Optional[float] = None,
+        hallucination_weight: Optional[float] = None,
+        completeness_weight: Optional[float] = None,
     ):
         self.retriever = rag_retriever or retriever
         self.relevance_judge = rel_judge or relevance_judge
         self.accuracy_judge = acc_judge or accuracy_judge
         self.hallucination_judge = hal_judge or hallucination_judge
+        self.completeness_judge = comp_judge or completeness_judge
+        self.verdict_agent = v_agent or verdict_agent
 
-        self.w_accuracy = accuracy_weight
-        self.w_relevance = relevance_weight
-        self.w_hallucination = hallucination_weight
+        self.w_accuracy = accuracy_weight if accuracy_weight is not None else WEIGHT_ACCURACY
+        self.w_hallucination = hallucination_weight if hallucination_weight is not None else WEIGHT_HALLUCINATION
+        self.w_relevance = relevance_weight if relevance_weight is not None else WEIGHT_RELEVANCE
+        self.w_completeness = completeness_weight if completeness_weight is not None else WEIGHT_COMPLETENESS
 
     def evaluate_response(
         self,
@@ -57,7 +73,7 @@ class EvaluationOrchestrator:
         dataset_filter: Optional[str] = None,
         top_k: int = 5,
     ) -> Dict[str, Any]:
-        """Execute full evaluation pipeline and return structured results."""
+        """Execute full 4-dimension evaluation pipeline and return structured results."""
         q_clean = question.strip()
         ans_clean = ai_response.strip()
 
@@ -96,93 +112,55 @@ class EvaluationOrchestrator:
             source_document=source_document,
         )
 
-        # Step 5: Overall Score Aggregation
-        acc_norm = accuracy_res.score / 5.0
-        rel_norm = relevance_res.score / 5.0
-
-        if hallucination_res.hallucination_status == "NONE":
-            hal_safety = 1.0
-        elif hallucination_res.hallucination_status == "PARTIAL":
-            hal_safety = 0.5
-        else:
-            hal_safety = 0.0
-
-        raw_score = (
-            (acc_norm * self.w_accuracy)
-            + (rel_norm * self.w_relevance)
-            + (hal_safety * self.w_hallucination)
-        ) * 100.0
-        overall_score = max(0, min(100, int(round(raw_score))))
-
-        # Step 6: Rule-Based Final Verdict Determination
-        verdict, verdict_reasoning = self._compute_verdict(
-            accuracy=accuracy_res,
-            relevance=relevance_res,
-            hallucination=hallucination_res,
-            overall_score=overall_score,
-            has_strong_evidence=bool(raw_evidence and float(raw_evidence[0].get("similarity_score", 0.0)) >= 0.50),
+        # Step 5: Completeness Judge Agent
+        completeness_res: CompletenessResult = self.completeness_judge.evaluate(
+            question=q_clean,
+            ai_response=ans_clean,
+            retrieved_evidence=raw_evidence,
+            reference_answer=reference_answer,
+            source_document=source_document,
         )
 
+        # Step 6: Dedicated Verdict Agent & Weighted Synthesis
+        verdict_res: VerdictResult = self.verdict_agent.synthesize_verdict(
+            accuracy_result=accuracy_res.model_dump(),
+            relevance_result=relevance_res.model_dump(),
+            hallucination_result=hallucination_res.model_dump(),
+            completeness_result=completeness_res.model_dump(),
+        )
+
+        # Build OverallEvaluation for backward compatibility
         overall_eval = OverallEvaluation(
-            overall_score=overall_score,
-            verdict=verdict,
-            verdict_reasoning=verdict_reasoning,
+            overall_score=verdict_res.overall_score,
+            verdict=verdict_res.verdict,
+            verdict_reasoning=verdict_res.consolidated_reasoning,
             accuracy_weight=self.w_accuracy,
-            relevance_weight=self.w_relevance,
             hallucination_safety_weight=self.w_hallucination,
+            relevance_weight=self.w_relevance,
+            completeness_weight=self.w_completeness,
+            dimension_scores=verdict_res.dimension_scores,
+            normalized_scores=verdict_res.normalized_scores,
+            weighted_contributions=verdict_res.weighted_contributions,
+            major_strengths=verdict_res.major_strengths,
+            major_issues=verdict_res.major_issues,
+            consolidated_reasoning=verdict_res.consolidated_reasoning,
+            critical_override_applied=verdict_res.critical_override_applied,
+            critical_override_reason=verdict_res.critical_override_reason,
         )
 
         return {
+            "verdict": overall_eval.verdict,
+            "overall_score": overall_eval.overall_score,
             "evidence": raw_evidence,
             "additional_matches": additional_matches,
             "candidate_count": candidate_count,
             "relevance": relevance_res.model_dump(),
             "accuracy": accuracy_res.model_dump(),
             "hallucination": hallucination_res.model_dump(),
+            "completeness": completeness_res.model_dump(),
             "overall": overall_eval.model_dump(),
+            "verdict_details": verdict_res.model_dump(),
         }
-
-    def _compute_verdict(
-        self,
-        accuracy: AccuracyResult,
-        relevance: RelevanceResult,
-        hallucination: HallucinationResult,
-        overall_score: int,
-        has_strong_evidence: bool,
-    ) -> tuple:
-        """Compute transparent rule-based verdict based on actual agent metrics."""
-        has_contradicted = any(c.status == "CONTRADICTED" for c in hallucination.flagged_claims)
-        all_insufficient = (
-            len(hallucination.flagged_claims) > 0
-            and all(c.status == "INSUFFICIENT_EVIDENCE" for c in hallucination.flagged_claims)
-        )
-
-        # FAIL conditions:
-        # Irrelevant (<= 2), clearly incorrect (<= 2), contradicted claims, or high risk with low score
-        if relevance.score <= 2:
-            return "FAIL", f"The response is off-topic or fails to address the question (Relevance: {relevance.score}/5)."
-        if accuracy.score <= 2 or has_contradicted:
-            return "FAIL", "The response contains direct factual contradictions or fundamental inaccuracies conflicting with reference evidence."
-        if hallucination.risk_level == "HIGH" or hallucination.hallucination_status == "HIGH":
-            return "FAIL", "High hallucination risk detected: response contains significant unsupported or contradictory claims."
-
-        # PASS conditions:
-        # High relevance (>= 4), high accuracy (>= 4), low hallucination risk, overall score >= 75
-        if (
-            relevance.score >= 4
-            and accuracy.score >= 4
-            and hallucination.risk_level == "LOW"
-            and overall_score >= 75
-        ):
-            return "PASS", "Strong accuracy and relevance with claims verified against reference evidence."
-
-        # REVIEW conditions (default fallback for mixed, partial, or insufficient evidence):
-        if all_insufficient or not has_strong_evidence:
-            return "REVIEW", "Limited reference evidence available in the knowledge base; manual verification recommended."
-        if hallucination.risk_level == "MEDIUM" or hallucination.hallucination_status == "PARTIAL":
-            return "REVIEW", "Mixed evaluation: some assertions are grounded while others lack conclusive reference evidence."
-
-        return "REVIEW", "Evaluation indicates partial correctness or moderate relevance requiring review."
 
 
 # Global singleton instance

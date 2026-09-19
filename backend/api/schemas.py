@@ -60,11 +60,13 @@ class EvaluationSubmissionResponse(BaseModel):
 
     # Agent evaluation metrics
     overall_score: int = Field(default=0, description="Overall weighted score (0-100).")
-    verdict: str = Field(default="REVIEW", description="Final verdict: PASS, REVIEW, or FAIL.")
+    verdict: str = Field(default="REVIEW", description="Final verdict: PASS, NEEDS IMPROVEMENT, or FAIL.")
     verdict_reasoning: str = Field(default="", description="Explanation of final verdict.")
     relevance: Dict[str, Any] = Field(default_factory=dict, description="Relevance Judge Agent evaluation.")
     accuracy: Dict[str, Any] = Field(default_factory=dict, description="Accuracy Judge Agent evaluation.")
     hallucination: Dict[str, Any] = Field(default_factory=dict, description="Hallucination Detection Agent evaluation.")
+    completeness: Dict[str, Any] = Field(default_factory=dict, description="Completeness Judge Agent evaluation.")
+    verdict_details: Dict[str, Any] = Field(default_factory=dict, description="Verdict Agent detailed synthesis and contributions.")
 
     status: str = "completed"
     created_at: str
@@ -88,8 +90,93 @@ class SubmissionListItem(BaseModel):
     verdict: Optional[str] = None
     accuracy_score: Optional[int] = None
     relevance_score: Optional[int] = None
+    completeness_score: Optional[int] = None
     hallucination_risk: Optional[str] = None
     created_at: str
+
+
+class BatchRecord(BaseModel):
+    """Record representation in batch verification."""
+    record_id: int
+    submission_id: Optional[str] = None
+    question: str
+    ai_response: str
+    reference_answer: Optional[str] = None
+    source_information: Optional[str] = None
+    status: str = "success"  # "success" | "error"
+    error: Optional[str] = None
+    accuracy_score: Optional[int] = None
+    relevance_score: Optional[int] = None
+    completeness_score: Optional[int] = None
+    completeness_status: Optional[str] = None
+    hallucination_risk: Optional[str] = None
+    hallucination_status: Optional[str] = None
+    overall_score: Optional[int] = None
+    verdict: Optional[str] = None
+    evaluation: Optional[Dict[str, Any]] = None
+
+
+class BatchSummaryStats(BaseModel):
+    """Aggregated statistics across batch evaluation records."""
+    total_records: int
+    successful_evaluations: int
+    failed_evaluations: int
+    pass_count: int
+    needs_improvement_count: int
+    fail_count: int
+    average_accuracy: Optional[float] = None
+    average_relevance: Optional[float] = None
+    average_completeness: Optional[float] = None
+    hallucination_flag_frequency: float = 0.0
+    average_overall_score: Optional[float] = None
+
+
+class InvalidRowDetail(BaseModel):
+    """Structured invalid row explanation."""
+    row_number: int
+    error: str
+    reason: str
+
+
+class BatchEvaluationResult(BaseModel):
+    """Comprehensive result of batch evaluation job."""
+    success: bool = True
+    batch_id: str
+    filename: str
+    total_records: int
+    valid_records_count: int
+    invalid_records_count: int
+    validation_errors: List[str] = Field(default_factory=list)
+    invalid_rows: List[InvalidRowDetail] = Field(default_factory=list)
+    stats: BatchSummaryStats
+    records: List[BatchRecord] = Field(default_factory=list)
+    created_at: str
+
+
+class BatchValidationPreview(BaseModel):
+    """Result of pre-validating a batch CSV before execution."""
+    is_valid: bool
+    filename: str
+    total_rows: int
+    valid_rows_count: int
+    invalid_rows_count: int
+    detected_columns: Dict[str, str] = Field(default_factory=dict)
+    missing_required_columns: List[str] = Field(default_factory=list)
+    preview_rows: List[Dict[str, Any]] = Field(default_factory=list)
+    invalid_rows: List[InvalidRowDetail] = Field(default_factory=list)
+    error_message: Optional[str] = None
+
+
+class BatchJobListItem(BaseModel):
+    """Listing item for batch evaluation history."""
+    batch_id: str
+    filename: str
+    total_records: int
+    processed_records: int
+    status: str
+    stats: Optional[Dict[str, Any]] = None
+    created_at: str
+
 
 
 class DocumentUploadResponse(BaseModel):
@@ -110,6 +197,7 @@ class HealthResponse(BaseModel):
     total_indexed_chunks: int
     embedding_model: str
     timestamp: str
+    agent_statuses: Optional[Dict[str, str]] = None
 
 
 class AnalyticsResponse(BaseModel):
@@ -118,11 +206,14 @@ class AnalyticsResponse(BaseModel):
     evidence_retrieved_count: int
     average_accuracy: Optional[float] = None
     average_relevance: Optional[float] = None
+    average_completeness: Optional[float] = None
+    average_hallucination_safety: Optional[float] = None
     average_overall_score: Optional[float] = None
     pass_count: int
     review_count: int
     fail_count: int
     hallucination_flag_count: int
+    hallucination_frequency: Optional[float] = None
     has_data: bool
 
 

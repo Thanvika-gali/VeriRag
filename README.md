@@ -137,7 +137,7 @@ source .venv/bin/activate  # or .venv\Scripts\activate on Windows
 # Install dependencies
 pip install -r requirements.txt
 
-# Run FastAPI backend (port 8001)
+# Run FastAPI backend (port 8000)
 python backend/main.py
 ```
 

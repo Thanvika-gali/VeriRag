@@ -77,12 +77,13 @@ export default function HistoryView({
             <thead>
               <tr>
                 <th>Question</th>
-                <th>Verdict</th>
-                <th>Overall Score</th>
+                <th>Overall</th>
                 <th>Accuracy</th>
                 <th>Relevance</th>
                 <th>Hallucination</th>
-                <th>Date / Time</th>
+                <th>Completeness</th>
+                <th>Verdict</th>
+                <th>Date</th>
                 <th>Action</th>
               </tr>
             </thead>
@@ -100,18 +101,13 @@ export default function HistoryView({
                     key={item.submission_id}
                     onClick={() => onSelectSubmission(item.submission_id)}
                   >
-                    <td style={{ maxWidth: '280px' }}>
+                    <td style={{ maxWidth: '260px' }}>
                       <div style={{ fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                         {item.question}
                       </div>
                       <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                         {item.ai_response_snippet}
                       </div>
-                    </td>
-                    <td>
-                      <span className={`verdict-badge ${verdictClass}`}>
-                        {item.verdict || 'REVIEW'}
-                      </span>
                     </td>
                     <td>
                       <span style={{ fontWeight: 700, fontSize: '0.95rem' }}>
@@ -125,6 +121,12 @@ export default function HistoryView({
                     <td>
                       <span style={{ fontSize: '0.8rem', fontWeight: 600 }}>
                         {item.hallucination_risk || 'LOW'}
+                      </span>
+                    </td>
+                    <td>{item.completeness_score ? `${item.completeness_score}/5` : '—'}</td>
+                    <td>
+                      <span className={`verdict-badge ${verdictClass}`}>
+                        {item.verdict || 'REVIEW'}
                       </span>
                     </td>
                     <td style={{ fontSize: '0.78rem', color: 'var(--text-secondary)' }}>

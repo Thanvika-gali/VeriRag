@@ -1,6 +1,7 @@
 import React from 'react';
 import {
   ShieldCheck,
+  ListChecks,
   History,
   Database,
   Layers,
@@ -16,6 +17,7 @@ export default function Sidebar({ activePage, setActivePage, historyCount = 0, o
       category: 'VERIFY',
       items: [
         { id: 'verify', label: 'Verify Response', icon: ShieldCheck },
+        { id: 'batch-verify', label: 'Batch Verify', icon: ListChecks },
         { id: 'history', label: 'Evaluation History', icon: History, badge: historyCount > 0 ? historyCount : null },
       ],
     },

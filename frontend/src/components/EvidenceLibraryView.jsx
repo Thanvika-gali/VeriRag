@@ -33,7 +33,7 @@ export default function EvidenceLibraryView({ systemHealth }) {
   const [hasSearched, setHasSearched] = useState(false);
   const [expandedId, setExpandedId] = useState(null);
   const [metaStats, setMetaStats] = useState({
-    totalChunks: systemHealth?.total_indexed_chunks || 543,
+    totalChunks: systemHealth?.total_indexed_chunks ?? 0,
     embeddingModel: systemHealth?.embedding_model || 'all-MiniLM-L6-v2',
     embeddingDimension: 384,
   });
@@ -50,7 +50,7 @@ export default function EvidenceLibraryView({ systemHealth }) {
       if (res.ok) {
         const data = await res.json();
         setMetaStats({
-          totalChunks: data.total_indexed_chunks ?? 543,
+          totalChunks: data.total_indexed_chunks ?? 0,
           embeddingModel: data.embedding_model || 'all-MiniLM-L6-v2',
           embeddingDimension: 384,
         });
@@ -310,10 +310,31 @@ export default function EvidenceLibraryView({ systemHealth }) {
           /* 4. Results List */
           <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
             {results.map((item, idx) => {
-              const simPercent = Math.round((item.similarity_score || 0) * 1000) / 10;
-              const isExpanded = expandedId === (item.chunk_id || idx);
-              const tier = item.match_tier || (item.similarity_score >= 0.65 ? 'Strong' : item.similarity_score >= 0.50 ? 'Moderate' : 'Weak');
-              const relevanceClass = item.relevance_classification || (tier === 'Strong' ? 'DIRECTLY RELEVANT' : tier === 'Moderate' ? 'RELATED BUT NOT SUFFICIENT' : 'WEAK');
+              const rawTier = (item.match_tier || '').toLowerCase();
+              const normTier =
+                rawTier === 'strong'
+                  ? 'STRONG'
+                  : rawTier === 'moderate'
+                  ? 'MODERATE'
+                  : rawTier === 'weak'
+                  ? 'WEAK'
+                  : rawTier === 'irrelevant'
+                  ? 'IRRELEVANT'
+                  : (item.similarity_score >= 0.65
+                  ? 'STRONG'
+                  : item.similarity_score >= 0.50
+                  ? 'MODERATE'
+                  : item.similarity_score >= 0.35
+                  ? 'WEAK'
+                  : 'IRRELEVANT');
+
+              const relevanceClass =
+                item.relevance_classification ||
+                (normTier === 'STRONG'
+                  ? 'DIRECTLY RELEVANT'
+                  : normTier === 'MODERATE'
+                  ? 'RELATED BUT NOT SUFFICIENT'
+                  : 'WEAK');
 
               // Color determination for relevance classification
               let relStyle = {
@@ -404,12 +425,12 @@ export default function EvidenceLibraryView({ systemHealth }) {
                           letterSpacing: '0.03em',
                           padding: '3px 8px',
                           borderRadius: 'var(--radius-sm)',
-                          backgroundColor: tier === 'Strong' ? 'var(--status-pass-bg)' : tier === 'Moderate' ? 'var(--status-review-bg)' : 'var(--bg-surface-muted)',
-                          color: tier === 'Strong' ? 'var(--status-pass-text)' : tier === 'Moderate' ? 'var(--status-review-text)' : 'var(--text-muted)',
-                          border: `1px solid ${tier === 'Strong' ? 'var(--status-pass-border)' : tier === 'Moderate' ? 'var(--status-review-border)' : 'var(--border-subtle)'}`,
+                          backgroundColor: normTier === 'STRONG' ? 'var(--status-pass-bg)' : normTier === 'MODERATE' ? 'var(--status-review-bg)' : 'var(--bg-surface-muted)',
+                          color: normTier === 'STRONG' ? 'var(--status-pass-text)' : normTier === 'MODERATE' ? 'var(--status-review-text)' : 'var(--text-muted)',
+                          border: `1px solid ${normTier === 'STRONG' ? 'var(--status-pass-border)' : normTier === 'MODERATE' ? 'var(--status-review-border)' : 'var(--border-subtle)'}`,
                         }}
                       >
-                        {tier} Match
+                        {normTier} MATCH
                       </span>
 
                       <span
