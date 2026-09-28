@@ -92,6 +92,8 @@ class EvaluationOrchestrator:
         relevance_res: RelevanceResult = self.relevance_judge.evaluate(
             question=q_clean,
             ai_response=ans_clean,
+            reference_answer=reference_answer,
+            retrieved_evidence=raw_evidence,
         )
 
         # Step 3: Accuracy Judge Agent

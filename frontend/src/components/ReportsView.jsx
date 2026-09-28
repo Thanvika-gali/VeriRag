@@ -3,6 +3,7 @@ import { FileText, Download, Printer, ArrowRight, ShieldCheck } from 'lucide-rea
 
 export default function ReportsView({ currentEvaluation, historyList = [], onSelectSubmission, onNewEvaluation }) {
   const evalItem = currentEvaluation || (historyList.length > 0 ? historyList[0] : null);
+  const [pdfLoading, setPdfLoading] = React.useState(false);
 
   const handleDownloadJSON = () => {
     if (!evalItem) return;
@@ -13,6 +14,29 @@ export default function ReportsView({ currentEvaluation, historyList = [], onSel
     document.body.appendChild(downloadAnchor);
     downloadAnchor.click();
     downloadAnchor.remove();
+  };
+
+  const handleDownloadPDF = async () => {
+    if (!evalItem) return;
+    setPdfLoading(true);
+    try {
+      const subId = evalItem.submission_id || evalItem.id;
+      const res = await fetch(`/api/reports/pdf?submission_id=${subId}`);
+      if (!res.ok) throw new Error('PDF export failed on backend.');
+      const blob = await res.blob();
+      const downloadUrl = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = downloadUrl;
+      a.download = `proofrag_audit_${subId ? subId.slice(0, 8) : 'eval'}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(downloadUrl);
+    } catch (err) {
+      alert(`Could not download PDF report: ${err.message}`);
+    } finally {
+      setPdfLoading(false);
+    }
   };
 
   const handlePrint = () => {
@@ -85,10 +109,20 @@ export default function ReportsView({ currentEvaluation, historyList = [], onSel
             <button
               type="button"
               className="btn-primary"
+              onClick={handleDownloadPDF}
+              disabled={pdfLoading}
+              title="Generate and download authoritative PDF evaluation report"
+            >
+              <Download size={14} />
+              <span>{pdfLoading ? 'Generating PDF...' : 'Generate PDF Report'}</span>
+            </button>
+            <button
+              type="button"
+              className="btn-secondary"
               onClick={handlePrint}
             >
               <Printer size={14} />
-              <span>Print / Save PDF</span>
+              <span>Print View</span>
             </button>
           </div>
         </div>

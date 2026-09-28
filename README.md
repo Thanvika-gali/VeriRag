@@ -1,17 +1,21 @@
-# PROOFRAG — AI Response Verification
-
-> **Evidence-Grounded AI Response Verification & Multi-Agent Evaluation Platform**
+# PROOFRAG — AI Response Verification & Evaluation System
+> **Evidence-Grounded AI Response Verification & Multi-Agent Evaluation Platform (Milestone 4)**
 
 ---
 
 ## 1. Overview
 
-**PROOFRAG** is an evidence-grounded AI evaluation platform designed to verify AI-generated answers against trusted reference knowledge bases (TruthfulQA, SQuAD, and custom documents). It moves beyond naive string similarity by utilizing dense semantic vectors (`all-MiniLM-L6-v2`), local persistent vector storage (`ChromaDB`), and a multi-agent judge pipeline that evaluates responses across three critical dimensions:
+**PROOFRAG** is an evidence-grounded AI evaluation platform designed to verify AI-generated answers against trusted reference knowledge bases (TruthfulQA, SQuAD, and custom documents). It moves beyond naive string similarity by utilizing dense semantic vectors (`BAAI/bge-small-en-v1.5`), local persistent vector storage (`ChromaDB`), and an autonomous multi-agent judge pipeline that evaluates responses across four critical dimensions:
 
-1. **Relevance Judge**: Calibrated 1–5 assessment of topical alignment with question-specific entity and action heuristics.
-2. **Accuracy Judge**: Claim-level decomposition that penalizes mixed responses containing correct clauses combined with fabricated assertions ($\le 3/5$).
-3. **Hallucination Detection Agent**: Assertion-level grounding assigning strict states (`SUPPORTED`, `UNSUPPORTED`, `CONTRADICTED`, `INSUFFICIENT_EVIDENCE`) and overall risk levels (`LOW`, `MEDIUM`, `HIGH`).
-4. **Transparent Scoring & Verdict**: Linear multi-agent aggregation with rule-based verdict synthesis (`PASS`, `REVIEW`, `FAIL`).
+1. **Relevance Judge**: Calibrated 1–5 assessment of topical alignment with question-specific entity and intent heuristics.
+2. **Accuracy Judge**: Atomic claim-level decomposition that penalizes mixed responses and identifies factual contradictions.
+3. **Hallucination Detection Agent**: Claim-level grounding assigning strict states (`SUPPORTED`, `UNSUPPORTED`, `CONTRADICTED`, `INSUFFICIENT_EVIDENCE`) and overall risk levels (`LOW`, `MEDIUM`, `HIGH`).
+4. **Completeness Judge**: Requirement decomposition measuring coverage across multi-part sub-aspects and prompt constraints.
+5. **Verdict Agent**: Weighted composite scoring and safety overrides producing final verdicts (`PASS`, `NEEDS IMPROVEMENT`, `FAIL`).
+6. **Evaluation Scoring Dashboard (M4.1)**: Real-time analytics computed directly from SQLite evaluation records with multi-dimensional filtering and drill-down audit logs.
+7. **PDF Report Export (M4.2)**: Automated multi-page executive evaluation report generation via ReportLab.
+
+For full architecture details, see the [Milestone 4 Technical Documentation](file:///e:/projects/VeriRAG/docs/MILESTONE_4_TECHNICAL_DOCUMENTATION.md).
 
 ---
 
@@ -34,28 +38,28 @@ User Inquiry (Question + AI Response + Optional Reference Doc)
                 │                  │
          Direct Evidence    Additional Matches
                 │
-    ┌───────────┼──────────────────────────┐
-    │           │                          │
-    ▼           ▼                          ▼
-┌─────────┐ ┌──────────────┐    ┌────────────────────┐
-│Relevance│ │Accuracy Judge│    │Hallucination Agent │
-│  Judge  │ │(Claim Decomp)│    │ (4 Grounding States)│
-└────┬────┘ └──────┬───────┘    └─────────┬──────────┘
-     │             │                      │
-     └─────────────┼──────────────────────┘
+    ┌───────────┼──────────────────┬──────────────────┐
+    │           │                  │                  │
+    ▼           ▼                  ▼                  ▼
+┌─────────┐ ┌──────────────┐ ┌──────────────────┐ ┌─────────────┐
+│Relevance│ │Accuracy Judge│ │Hallucination Agent│ │Completeness │
+│  Judge  │ │(Claim Decomp)│ │ (Claim Grounding)│ │    Judge    │
+└────┬────┘ └──────┬───────┘ └─────────┬────────┘ └──────┬──────┘
+     │             │                   │                 │
+     └─────────────┼───────────────────┴─────────────────┘
                    │
                    ▼
-┌──────────────────────────────────────────────┐
-│       Transparent Linear Score Synthesis     │
-│ Overall = (Acc/5 * 0.40 + Rel/5 * 0.30       │
-│           + Hal_Safety * 0.30) * 100         │
-└──────────────────────┬───────────────────────┘
-                       │
-                       ▼
-┌──────────────────────────────────────────────┐
-│         Rule-Based Final Verdict             │
-│            PASS | REVIEW | FAIL              │
-└──────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────┐
+│          Transparent Weighted Score Synthesis       │
+│ Score = (Acc*0.35 + Rel*0.25 + Comp*0.20            │
+│          + Hal_Safety*0.20) * 20                    │
+└──────────────────────────┬──────────────────────────┘
+                           │
+                           ▼
+┌─────────────────────────────────────────────────────┐
+│             Dedicated Verdict Agent                 │
+│         PASS | NEEDS IMPROVEMENT | FAIL             │
+└─────────────────────────────────────────────────────┘
 ```
 
 ---

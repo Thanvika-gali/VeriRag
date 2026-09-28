@@ -781,6 +781,22 @@ export default function BatchVerifyView() {
                 <Download size={14} />
                 <span>Export CSV</span>
               </button>
+
+              <button
+                type="button"
+                className="btn-primary"
+                style={{ padding: '5px 12px', fontSize: '0.78rem' }}
+                onClick={() => {
+                  const bId = batchResult?.batch_id;
+                  if (bId) {
+                    window.open(`/api/reports/pdf?batch_id=${bId}`, '_blank');
+                  }
+                }}
+                title="Export executive PDF evaluation report"
+              >
+                <Download size={14} />
+                <span>Export PDF Report</span>
+              </button>
             </div>
           </div>
 

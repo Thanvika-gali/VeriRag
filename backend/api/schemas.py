@@ -232,3 +232,67 @@ class KnowledgeBaseStatsResponse(BaseModel):
     embedding_model: str
     status: str
     datasets: List[DatasetInfo]
+
+
+class FrequentIssueItem(BaseModel):
+    """Frequent evaluation issue details."""
+    issue_type: str
+    category: str
+    count: int
+    percentage: float
+    description: str
+
+
+class BatchTrendItem(BaseModel):
+    """Batch trend summary."""
+    batch_id: str
+    filename: str
+    created_at: str
+    total_records: int
+    pass_count: int
+    review_count: int
+    fail_count: int
+    pass_rate: float
+    average_overall_score: Optional[float] = None
+    average_accuracy: Optional[float] = None
+    average_relevance: Optional[float] = None
+    average_completeness: Optional[float] = None
+    average_hallucination_safety: Optional[float] = None
+    hallucination_flag_count: int = 0
+    hallucination_frequency: float = 0.0
+
+
+class DrillDownRecordItem(BaseModel):
+    """Drill-down record item for interactive dashboard navigation."""
+    submission_id: str
+    question: str
+    ai_response_snippet: str
+    overall_score: Optional[int] = None
+    verdict: Optional[str] = None
+    accuracy_score: Optional[int] = None
+    relevance_score: Optional[int] = None
+    completeness_score: Optional[int] = None
+    hallucination_risk: Optional[str] = None
+    batch_id: Optional[str] = None
+    created_at: str
+    flagged_claims_count: int = 0
+    missing_aspects_count: int = 0
+
+
+class DashboardStatsResponse(BaseModel):
+    """Comprehensive real-time dashboard statistics and distribution metrics for Milestone 4."""
+    total_evaluations: int
+    verdicts: Dict[str, int]
+    verdict_percentages: Dict[str, float]
+    average_overall_score: Optional[float] = None
+    dimension_averages: Dict[str, Optional[float]]
+    hallucination_stats: Dict[str, Any]
+    completeness_stats: Dict[str, Any]
+    score_distributions: Dict[str, Dict[str, int]]
+    frequent_issues: List[FrequentIssueItem] = Field(default_factory=list)
+    batch_trends: List[BatchTrendItem] = Field(default_factory=list)
+    available_batches: List[Dict[str, str]] = Field(default_factory=list)
+    filtered_records_count: int = 0
+    records: List[DrillDownRecordItem] = Field(default_factory=list)
+    has_data: bool = True
+

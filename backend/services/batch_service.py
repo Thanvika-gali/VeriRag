@@ -431,6 +431,22 @@ class BatchEvaluationService:
                     evaluation_result=eval_res,
                 )
 
+                ev_ids = [str(e.get("chunk_id", "")) for e in eval_res.get("evidence", [])]
+                ev_sims = [round(float(e.get("similarity_score", 0.0)), 3) for e in eval_res.get("evidence", [])]
+                q_hash = f"{hash(q) & 0xFFFFFFFF:08x}"
+
+                logger.info(
+                    f"\n[Batch Evaluation Debug] Row {record_id}\n"
+                    f"Question Hash: {q_hash} | Submission ID: {sub['id']}\n"
+                    f"RAG Retrieved Chunks: {ev_ids} | Similarity: {ev_sims}\n"
+                    f"Judges Executed:\n"
+                    f"  - Relevance: {rel_s}/5\n"
+                    f"  - Accuracy: {acc_s}/5\n"
+                    f"  - Hallucination: {hal_risk} ({hal_status})\n"
+                    f"  - Completeness: {comp_s}/5 ({comp.get('status')})\n"
+                    f"Verdict: {verdict_val} ({score_val}/100)"
+                )
+
                 records.append(
                     BatchRecord(
                         record_id=record_id,

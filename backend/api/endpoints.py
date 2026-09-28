@@ -2,12 +2,13 @@
 
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
-from fastapi import APIRouter, File, HTTPException, Query, UploadFile, status
+from fastapi import APIRouter, File, HTTPException, Query, Response, UploadFile, status
 from backend.api.schemas import (
     AnalyticsResponse,
     BatchEvaluationResult,
     BatchJobListItem,
     BatchValidationPreview,
+    DashboardStatsResponse,
     DatasetInfo,
     DocumentUploadResponse,
     EvaluationSubmissionRequest,
@@ -23,6 +24,7 @@ from backend.rag.vector_store import vector_store
 from backend.services.batch_service import batch_evaluation_service
 from backend.services.doc_parser import DocumentParser
 from backend.services.evaluation_service import evaluation_service
+from backend.services.pdf_report_service import pdf_report_service
 from evaluation.orchestrator import evaluation_orchestrator
 
 router = APIRouter(prefix="/api", tags=["Evaluation & Knowledge Base"])
@@ -534,6 +536,101 @@ def list_batch_jobs(
 ):
     """Retrieve history of batch evaluation jobs."""
     return db_instance.list_batch_jobs(limit=limit, offset=offset)
+
+
+# ==============================================================================
+# Milestone 4 — Evaluation Scoring Dashboard & PDF Report Endpoints
+# ==============================================================================
+
+@router.get(
+    "/dashboard/stats",
+    response_model=DashboardStatsResponse,
+    summary="Retrieve real-time evaluation dashboard metrics and distributions",
+)
+def get_dashboard_stats(
+    batch_id: Optional[str] = Query(default=None, description="Optional batch ID filter (or 'ALL', 'SINGLE')"),
+    verdict: Optional[str] = Query(default=None, description="Optional verdict filter: PASS, NEEDS IMPROVEMENT, FAIL"),
+    score_min: Optional[int] = Query(default=None, ge=0, le=100, description="Minimum overall score"),
+    score_max: Optional[int] = Query(default=None, ge=0, le=100, description="Maximum overall score"),
+    hallucination_status: Optional[str] = Query(default=None, description="Hallucination filter: FLAGGED, SAFE"),
+    start_date: Optional[str] = Query(default=None, description="ISO start date filter"),
+    end_date: Optional[str] = Query(default=None, description="ISO end date filter"),
+    limit_records: int = Query(default=100, ge=1, le=500, description="Maximum drill-down records to return"),
+):
+    """Retrieve verified evaluation metrics, dimension averages, hallucination/completeness stats, and distributions."""
+    data = db_instance.get_dashboard_stats(
+        batch_id=batch_id,
+        verdict=verdict,
+        score_min=score_min,
+        score_max=score_max,
+        hallucination_status=hallucination_status,
+        start_date=start_date,
+        end_date=end_date,
+        limit_records=limit_records,
+    )
+    return DashboardStatsResponse(**data)
+
+
+@router.get(
+    "/reports/pdf",
+    summary="Generate and download a professional PDF evaluation audit report",
+)
+def export_pdf_report(
+    batch_id: Optional[str] = Query(default=None, description="Optional batch ID to report on"),
+    submission_id: Optional[str] = Query(default=None, description="Optional single submission ID to report on"),
+    limit: int = Query(default=500, ge=1, le=1000, description="Max evaluation records in report"),
+):
+    """Generate professional PDF evaluation report using ReportLab with multi-page tables and charts."""
+    try:
+        report_data = db_instance.get_evaluations_for_report(
+            batch_id=batch_id,
+            submission_id=submission_id,
+            limit=limit,
+        )
+
+        pdf_bytes = pdf_report_service.generate_pdf_report(report_data)
+
+        # Build clean filename
+        if submission_id:
+            filename = f"proofrag_audit_{submission_id[:8]}.pdf"
+        elif batch_id and batch_id.upper() not in ("ALL", "NONE", ""):
+            filename = f"proofrag_batch_report_{batch_id[:8]}.pdf"
+        else:
+            filename = f"proofrag_evaluation_report_{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M')}.pdf"
+
+        return Response(
+            content=pdf_bytes,
+            media_type="application/pdf",
+            headers={
+                "Content-Disposition": f'attachment; filename="{filename}"',
+                "Content-Length": str(len(pdf_bytes)),
+            },
+        )
+    except Exception as exc:
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Unable to generate PDF report: {str(exc)}",
+        ) from exc
+
+
+@router.get(
+    "/reports/data",
+    summary="Retrieve report evaluation data as structured JSON",
+)
+def get_report_data(
+    batch_id: Optional[str] = Query(default=None),
+    submission_id: Optional[str] = Query(default=None),
+    limit: int = Query(default=500, ge=1, le=1000),
+):
+    """Retrieve raw evaluation data formatted for report display."""
+    return db_instance.get_evaluations_for_report(
+        batch_id=batch_id,
+        submission_id=submission_id,
+        limit=limit,
+    )
+
 
 
 

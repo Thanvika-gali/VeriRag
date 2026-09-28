@@ -266,6 +266,8 @@ export default function App() {
           {(activePage === 'insights' || activePage === 'analytics') && (
             <AnalyticsView
               analytics={analytics}
+              onSelectSubmission={handleSelectSubmission}
+              onNavigatePage={setActivePage}
               onNewEvaluation={() => setActivePage('verify')}
             />
           )}

@@ -5,7 +5,8 @@ answers the submitted question using a defined 1-5 scale.
 """
 
 import logging
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
+import re
 from evaluation.llm_client import llm_client
 from evaluation.schemas import RelevanceResult
 from knowledge_base.embeddings.embedder import embedder
@@ -31,6 +32,8 @@ class RelevanceJudgeAgent:
         self,
         question: str,
         ai_response: str,
+        reference_answer: Optional[str] = None,
+        retrieved_evidence: Optional[List[Dict[str, Any]]] = None,
     ) -> RelevanceResult:
         """Evaluate topical relevance of AI response to question on 1-5 scale."""
         q_clean = (question or "").strip()
@@ -45,14 +48,38 @@ class RelevanceJudgeAgent:
 
         # Attempt external LLM judge if configured
         if self.llm.is_configured():
-            llm_result = self._evaluate_with_llm(q_clean, ans_clean)
+            llm_result = self._evaluate_with_llm(
+                q_clean,
+                ans_clean,
+                reference_answer=reference_answer,
+                retrieved_evidence=retrieved_evidence,
+            )
             if llm_result:
                 return llm_result
 
         # Deterministic local semantic relevance evaluation
-        return self._evaluate_locally(q_clean, ans_clean)
+        return self._evaluate_locally(
+            q_clean,
+            ans_clean,
+            reference_answer=reference_answer,
+            retrieved_evidence=retrieved_evidence,
+        )
 
-    def _evaluate_with_llm(self, question: str, ai_response: str) -> Optional[RelevanceResult]:
+    def _evaluate_with_llm(
+        self,
+        question: str,
+        ai_response: str,
+        reference_answer: Optional[str] = None,
+        retrieved_evidence: Optional[List[Dict[str, Any]]] = None,
+    ) -> Optional[RelevanceResult]:
+        ref_ans_text = reference_answer.strip() if reference_answer and reference_answer.strip() else "None provided."
+        evidence_snippets = [
+            f"[{e.get('dataset_name', 'Knowledge Base')}]: {e.get('text', '')[:300]}"
+            for e in (retrieved_evidence or [])[:3]
+            if e.get("text")
+        ]
+        evidence_text = "\n\n".join(evidence_snippets) if evidence_snippets else "None retrieved."
+
         system_prompt = (
             "You are the VeriRAG Relevance Judge Agent. Evaluate whether the AI answer directly and "
             "appropriately answers the question.\n"
@@ -65,7 +92,13 @@ class RelevanceJudgeAgent:
             "Respond strictly with a JSON object:\n"
             '{"score": <1-5>, "reasoning": "<detailed justification>"}'
         )
-        user_prompt = f"Question:\n{question}\n\nAI Answer:\n{ai_response}"
+        user_prompt = (
+            f"QUESTION:\n{question}\n\n"
+            f"AI RESPONSE:\n{ai_response}\n\n"
+            f"REFERENCE ANSWER:\n{ref_ans_text}\n\n"
+            f"RETRIEVED EVIDENCE:\n{evidence_text}\n\n"
+            "Evaluate this response only. Do not consider any previous batch records."
+        )
 
         try:
             res = self.llm.generate_json(system_prompt, user_prompt)
@@ -83,44 +116,71 @@ class RelevanceJudgeAgent:
 
         return None
 
-    def _evaluate_locally(self, question: str, ai_response: str) -> RelevanceResult:
+    def _evaluate_locally(
+        self,
+        question: str,
+        ai_response: str,
+        reference_answer: Optional[str] = None,
+        retrieved_evidence: Optional[List[Dict[str, Any]]] = None,
+    ) -> RelevanceResult:
         """Compute topical alignment using dense embeddings and semantic heuristics."""
         q_vec = embedder.embed_text(question)
         ans_vec = embedder.embed_text(ai_response)
 
         # Dot product of normalized unit vectors equals cosine similarity
-        dot_product = sum(a * b for a, b in zip(q_vec, ans_vec))
-        sim = max(0.0, min(1.0, dot_product))
+        sim = max(0.0, min(1.0, sum(a * b for a, b in zip(q_vec, ans_vec))))
 
-        # Lexical term overlap check (excluding common stop words)
+        # If verified reference answer is provided, check semantic alignment with reference
+        if reference_answer and reference_answer.strip():
+            ref_vec = embedder.embed_text(reference_answer.strip())
+            sim_ref = max(0.0, min(1.0, sum(a * b for a, b in zip(ans_vec, ref_vec))))
+            if sim_ref >= 0.70:
+                # Strong corroboration that the response directly answers the core topic
+                sim = max(sim, sim_ref * 0.95)
+
+        # Lexical term overlap check (excluding common question framing and stop words)
         stop_words = {
             "what", "is", "the", "a", "an", "and", "or", "in", "of", "to", "for",
-            "on", "with", "at", "by", "from", "up", "about", "into", "over", "after",
-            "can", "be", "seen", "does", "did", "do", "how", "why", "where", "who", "which"
+            "on", "with", "at", "by", "from", "up", "about", "into", "over", "after", "before",
+            "can", "be", "seen", "does", "did", "do", "how", "why", "where", "who", "which", "whom",
+            "happen", "happens", "happening", "tell", "explain", "describe", "give", "state", "list",
+            "receive", "receives", "enough", "not", "have", "has", "had", "would", "could", "should",
+            "there", "their", "they", "this", "that", "these", "those", "when"
         }
         q_tokens = {w.strip("?,.!;:\"'()").lower() for w in question.split() if len(w) > 2} - stop_words
         ans_tokens = {w.strip("?,.!;:\"'()").lower() for w in ai_response.split() if len(w) > 2}
 
-        overlap = len(q_tokens & ans_tokens) / max(1, len(q_tokens)) if q_tokens else 0.5
+        # Check token matches with morphological inflection/stem support
+        matched_tokens = 0
+        for qt in q_tokens:
+            if qt in ans_tokens:
+                matched_tokens += 1
+                continue
+            # Plural / tense stems
+            stems = [qt[:-1] if qt.endswith("s") else qt + "s"]
+            if any(s in ans_tokens for s in stems):
+                matched_tokens += 1
 
-        # Combined topical relevance metric
-        combined_rel = (sim * 0.70) + (overlap * 0.30)
+        overlap = matched_tokens / max(1, len(q_tokens)) if q_tokens else 0.5
 
-        if combined_rel >= 0.65:
+        # Combined topical relevance metric prioritizing semantic embedding similarity
+        combined_rel = (sim * 0.75) + (overlap * 0.25)
+
+        if sim >= 0.58 or combined_rel >= 0.55:
             score = 5
             reasoning = "The response directly addresses the question and stays closely focused on the requested subject matter."
-        elif combined_rel >= 0.50:
+        elif sim >= 0.46 or combined_rel >= 0.44:
             score = 4
             reasoning = "The response addresses the main subject of the question with high topical relevance."
-        elif combined_rel >= 0.36:
+        elif sim >= 0.32 or combined_rel >= 0.32:
             score = 3
             reasoning = "The response touches upon aspects of the question topic but does not provide a direct or complete answer."
-        elif combined_rel >= 0.24:
+        elif sim >= 0.20 or combined_rel >= 0.20:
             score = 2
             reasoning = "The response is largely peripheral, mentioning related concepts without addressing the actual question."
         else:
             score = 1
-            reasoning = f"The response is completely unrelated to the question topic (e.g. answering about a different subject entirely)."
+            reasoning = "The response is completely unrelated to the question topic (e.g. answering about a different subject entirely)."
 
         return RelevanceResult(
             score=score,
