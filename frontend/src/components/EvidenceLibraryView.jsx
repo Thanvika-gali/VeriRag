@@ -362,6 +362,9 @@ export default function EvidenceLibraryView({ systemHealth }) {
                 };
               }
 
+              const isExpanded = expandedId === (item.chunk_id || idx);
+              const simPercent = Math.round(Number(item.similarity_score || 0) * 100);
+
               return (
                 <div
                   key={item.chunk_id || idx}

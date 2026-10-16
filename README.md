@@ -102,17 +102,18 @@ To eliminate false-positive evidence grounding (such as watermelon seeds matchin
 
 ## 5. Distinctive 4-Tier Navigation & Design System
 
-The PROOFRAG interface features a four-tier operational hierarchy:
+The PROOFRAG interface features an intuitive operational hierarchy:
 
-1. **VERIFY**
-   - **Verify Response**: Interactive inquiry input, document attachment, demo presets, real-time stage progress, and evaluation view.
-   - **Evaluation History**: Comprehensive audit logs, search, verdict filters, and inspection.
-2. **EVIDENCE**
+1. **EVALUATION & VERIFICATION**
+   - **Evaluation Dashboard (M4.1)**: Real-time dynamic KPIs (Pass/Needs Improvement/Fail totals and percentages, dimension averages, hallucination and unsupported claim frequencies, batch score distribution, and interactive drill-down audit records).
+   - **Verify Response**: Interactive inquiry input, document attachment, demo presets with **Two Distinct AI Systems** (System A: Grounded RAG Assistant vs. System B: Baseline Ungrounded LLM), real-time stage progress, and detailed claim-level evaluation results.
+   - **Batch Evaluation (M3/M4)**: Fault-tolerant CSV batch processing with progress bars, statistics, and tabular inspection.
+   - **Evaluation History**: Audit logs, search, verdict filters, and JSON record inspection.
+2. **REPORTS & EXPORTS**
+   - **Executive PDF Report (M4.2)**: Automated multi-page PDF generation via ReportLab featuring visual verdict distribution bars, metadata, dimension breakdowns, evidence snippets, dataset tagging, and weakness-driven recommendation generator.
+3. **EVIDENCE & KNOWLEDGE BASE**
    - **Evidence Library**: Semantic search across ChromaDB embeddings with similarity and distance inspection.
-   - **Data Sources**: Collection metrics for TruthfulQA (435 chunks), SQuAD (108 chunks), and custom uploads.
-3. **INSIGHTS**
-   - **Verification Insights**: Pass/Review/Fail distributions, score averages, and hallucination frequency metrics.
-   - **Reports**: Detailed audit reports and JSON export capabilities.
+   - **Data Sources**: Collection metrics for TruthfulQA (435 chunks), SQuAD (108 chunks), and custom document uploads.
 4. **SYSTEM**
    - **System Status**: Telemetry, live health pings, embedding model diagnostics, and threshold matrix.
 
@@ -155,12 +156,19 @@ npm run dev
 
 ---
 
-## 7. Running the Automated Validation Suite
+## 7. Running the Automated Test Suites
 
-PROOFRAG includes a 10-scenario automated benchmark suite covering basic science, TruthfulQA misconceptions, fabricated claims, and formula integrity:
+PROOFRAG includes 130 fully automated tests covering end-to-end evaluation, claim decomposition, judge agents, mathematical exactness, and PDF generation:
 
 ```bash
-python -m pytest tests/test_validation_suite.py -v
+# Run Milestone 4 Master Audit Suite (20 tests)
+pytest tests/test_m4_comprehensive_audit.py -v
+
+# Run Milestone 4 Validation Suite (14 tests)
+pytest tests/test_m4_validation_suite.py -v
+
+# Run Entire Test Suite (130 tests across all modules)
+pytest tests/ -v
 ```
 
-All 10 benchmark scenarios run deterministically with zero mocked evaluations.
+All 130 tests run deterministically with zero fabricated results and zero hardcoded metrics.

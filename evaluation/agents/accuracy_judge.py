@@ -286,6 +286,14 @@ class AccuracyJudgeAgent:
         elif "consumes oxygen" in ans_lower and "releases oxygen" in combined_ref:
             direct_contradiction = True
 
+        # Check numerical/quantitative contradiction at document level
+        ans_nums = set(re.findall(r"\b\d+(?:\.\d+)?\b", ans_lower))
+        ref_nums_doc = set(re.findall(r"\b\d+(?:\.\d+)?\b", combined_ref.lower()))
+        if ans_nums and ref_nums_doc and ans_nums.isdisjoint(ref_nums_doc):
+            num_context_words = {"degree", "degrees", "celsius", "fahrenheit", "kelvin", "percent", "%", "meters", "miles", "km", "kilometers", "hours", "days", "years", "seconds", "temperature", "boil", "boils", "freeze", "freezes", "speed"}
+            if any(w in ans_lower and w in combined_ref.lower() for w in num_context_words):
+                direct_contradiction = True
+
         # Fine-grained reference passages
         ref_passages: List[Tuple[str, List[float]]] = []
         for ref in reference_texts:
@@ -370,6 +378,13 @@ class AccuracyJudgeAgent:
                 shares_query_attribute = any(w in c_lower for w in q_terms if len(w) > 3)
                 has_ref_entity = any(w in c_words for w in ref_ans_entities) if ref_ans_entities else False
                 if ref_ans_entities and not has_ref_entity and shares_query_attribute:
+                    is_claim_contradicted = True
+
+            c_nums = set(re.findall(r"\b\d+(?:\.\d+)?\b", c_lower))
+            r_nums = set(re.findall(r"\b\d+(?:\.\d+)?\b", combined_ref.lower()))
+            if c_nums and r_nums and c_nums.isdisjoint(r_nums):
+                num_context_words = {"degree", "degrees", "celsius", "fahrenheit", "kelvin", "percent", "%", "meters", "miles", "km", "kilometers", "hours", "days", "years", "seconds", "temperature", "boil", "boils", "freeze", "freezes", "speed"}
+                if any(w in c_lower and w in combined_ref.lower() for w in num_context_words) or term_overlap >= 0.40 or max_c_sim >= 0.55:
                     is_claim_contradicted = True
 
             all_distinct_unmatched = len(distinct_entities) >= 1 and len(unmatched_entities) == len(distinct_entities)

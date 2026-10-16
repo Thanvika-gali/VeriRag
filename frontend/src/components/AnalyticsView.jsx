@@ -664,26 +664,33 @@ export default function AnalyticsView({
                 </div>
               </div>
 
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '10px', margin: '14px 0' }}>
-                <div style={{ padding: '12px', backgroundColor: 'var(--bg-surface-subtle)', borderRadius: 'var(--radius-sm)', textAlign: 'center' }}>
-                  <div style={{ fontSize: '1.4rem', fontWeight: 800, color: halStats.frequency_percentage > 25 ? 'var(--status-fail-text)' : 'var(--text-primary)' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '8px', margin: '14px 0' }}>
+                <div style={{ padding: '10px 8px', backgroundColor: 'var(--bg-surface-subtle)', borderRadius: 'var(--radius-sm)', textAlign: 'center' }}>
+                  <div style={{ fontSize: '1.25rem', fontWeight: 800, color: halStats.frequency_percentage > 25 ? 'var(--status-fail-text)' : 'var(--text-primary)' }}>
                     {halStats.frequency_percentage || 0}%
                   </div>
-                  <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', fontWeight: 600 }}>FREQUENCY</div>
+                  <div style={{ fontSize: '0.68rem', color: 'var(--text-muted)', fontWeight: 600 }}>HAL. FREQUENCY</div>
                 </div>
 
-                <div style={{ padding: '12px', backgroundColor: 'var(--bg-surface-subtle)', borderRadius: 'var(--radius-sm)', textAlign: 'center' }}>
-                  <div style={{ fontSize: '1.4rem', fontWeight: 800, color: halStats.flagged_count > 0 ? 'var(--status-review-text)' : 'var(--text-primary)' }}>
+                <div style={{ padding: '10px 8px', backgroundColor: 'var(--bg-surface-subtle)', borderRadius: 'var(--radius-sm)', textAlign: 'center' }}>
+                  <div style={{ fontSize: '1.25rem', fontWeight: 800, color: halStats.flagged_count > 0 ? 'var(--status-review-text)' : 'var(--text-primary)' }}>
                     {halStats.flagged_count || 0}
                   </div>
-                  <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', fontWeight: 600 }}>FLAGGED RESPONSES</div>
+                  <div style={{ fontSize: '0.68rem', color: 'var(--text-muted)', fontWeight: 600 }}>FLAGGED RESPONSES</div>
                 </div>
 
-                <div style={{ padding: '12px', backgroundColor: 'var(--bg-surface-subtle)', borderRadius: 'var(--radius-sm)', textAlign: 'center' }}>
-                  <div style={{ fontSize: '1.4rem', fontWeight: 800, color: 'var(--text-primary)' }}>
+                <div style={{ padding: '10px 8px', backgroundColor: 'var(--bg-surface-subtle)', borderRadius: 'var(--radius-sm)', textAlign: 'center' }}>
+                  <div style={{ fontSize: '1.25rem', fontWeight: 800, color: (halStats.unsupported_claim_frequency || 0) > 20 ? 'var(--status-review-text)' : 'var(--text-primary)' }}>
+                    {halStats.unsupported_claim_frequency || 0}%
+                  </div>
+                  <div style={{ fontSize: '0.68rem', color: 'var(--text-muted)', fontWeight: 600 }}>UNSUPPORTED FREQ</div>
+                </div>
+
+                <div style={{ padding: '10px 8px', backgroundColor: 'var(--bg-surface-subtle)', borderRadius: 'var(--radius-sm)', textAlign: 'center' }}>
+                  <div style={{ fontSize: '1.25rem', fontWeight: 800, color: 'var(--text-primary)' }}>
                     {halStats.unsupported_claims_count || 0}
                   </div>
-                  <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', fontWeight: 600 }}>UNGROUNDED CLAIMS</div>
+                  <div style={{ fontSize: '0.68rem', color: 'var(--text-muted)', fontWeight: 600 }}>UNGROUNDED CLAIMS</div>
                 </div>
               </div>
 
@@ -697,9 +704,13 @@ export default function AnalyticsView({
                   <span>Medium Risk (Partially Ungrounded):</span>
                   <strong style={{ color: 'var(--status-review-text)' }}>{halStats.risk_breakdown?.MEDIUM || 0}</strong>
                 </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
                   <span>High Risk (Severely Contradicted):</span>
                   <strong style={{ color: 'var(--status-fail-text)' }}>{halStats.risk_breakdown?.HIGH || 0}</strong>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '6px', paddingTop: '6px', borderTop: '1px solid var(--border-subtle)' }}>
+                  <span>Responses with Unsupported Claims:</span>
+                  <strong>{halStats.records_with_unsupported_claims || 0} ({halStats.unsupported_claim_frequency || 0}%)</strong>
                 </div>
               </div>
             </div>

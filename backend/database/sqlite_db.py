@@ -595,6 +595,8 @@ class SubmissionDB:
                         "flagged_count": 0,
                         "frequency_percentage": 0.0,
                         "unsupported_claims_count": 0,
+                        "records_with_unsupported_claims": 0,
+                        "unsupported_claim_frequency": 0.0,
                         "risk_breakdown": {"LOW": 0, "MEDIUM": 0, "HIGH": 0},
                     },
                     "completeness_stats": {
@@ -735,7 +737,8 @@ class SubmissionDB:
                         "missing_aspects_count": c_missing,
                     })
 
-            missing_aspect_freq = round((records_with_missing_aspects / total_records) * 100, 1)
+            unsupported_claim_freq = round((records_with_unsupported_claims / total_records) * 100, 1) if total_records > 0 else 0.0
+            missing_aspect_freq = round((records_with_missing_aspects / total_records) * 100, 1) if total_records > 0 else 0.0
 
             # Score Distributions
             dist_overall = {"90-100": 0, "75-89": 0, "50-74": 0, "0-49": 0}
@@ -886,6 +889,8 @@ class SubmissionDB:
                     "flagged_count": flagged_cnt,
                     "frequency_percentage": hal_freq_pct,
                     "unsupported_claims_count": total_unsupported_claims,
+                    "records_with_unsupported_claims": records_with_unsupported_claims,
+                    "unsupported_claim_frequency": unsupported_claim_freq,
                     "risk_breakdown": {
                         "LOW": risk_low,
                         "MEDIUM": risk_med,
@@ -1016,7 +1021,59 @@ class SubmissionDB:
                     "retrieved_evidence": evidence,
                 })
 
-            stats = self.get_dashboard_stats(batch_id=batch_id) if not submission_id else None
+            if submission_id and evaluations:
+                se = evaluations[0]
+                se_ov = se.get("overall_score") or 0
+                se_v = se.get("verdict") or "NEEDS IMPROVEMENT"
+                se_hr = (se.get("hallucination_risk") or "LOW").upper()
+                se_acc = se.get("accuracy_score")
+                se_rel = se.get("relevance_score")
+                se_comp = se.get("completeness_score")
+                se_eval = se.get("evaluation_result") or {}
+                se_flagged = len(se_eval.get("hallucination", {}).get("flagged_claims", []))
+                se_missing = len(se_eval.get("completeness", {}).get("missing_aspects", []))
+
+                stats = {
+                    "total_evaluations": 1,
+                    "verdicts": {
+                        "PASS": 1 if se_v == "PASS" else 0,
+                        "NEEDS IMPROVEMENT": 1 if se_v in ("NEEDS IMPROVEMENT", "REVIEW") else 0,
+                        "FAIL": 1 if se_v == "FAIL" else 0,
+                    },
+                    "verdict_percentages": {
+                        "PASS": 100.0 if se_v == "PASS" else 0.0,
+                        "NEEDS IMPROVEMENT": 100.0 if se_v in ("NEEDS IMPROVEMENT", "REVIEW") else 0.0,
+                        "FAIL": 100.0 if se_v == "FAIL" else 0.0,
+                    },
+                    "average_overall_score": float(se_ov),
+                    "dimension_averages": {
+                        "accuracy": float(se_acc) if se_acc is not None else None,
+                        "relevance": float(se_rel) if se_rel is not None else None,
+                        "completeness": float(se_comp) if se_comp is not None else None,
+                        "hallucination_safety": 5.0 if se_hr == "LOW" else 2.5 if se_hr == "MEDIUM" else 0.0,
+                    },
+                    "hallucination_stats": {
+                        "flagged_count": 1 if se_hr in ("MEDIUM", "HIGH") else 0,
+                        "frequency_percentage": 100.0 if se_hr in ("MEDIUM", "HIGH") else 0.0,
+                        "unsupported_claims_count": se_flagged,
+                        "records_with_unsupported_claims": 1 if se_flagged > 0 else 0,
+                        "unsupported_claim_frequency": 100.0 if se_flagged > 0 else 0.0,
+                        "risk_breakdown": {
+                            "LOW": 1 if se_hr == "LOW" else 0,
+                            "MEDIUM": 1 if se_hr == "MEDIUM" else 0,
+                            "HIGH": 1 if se_hr == "HIGH" else 0,
+                        },
+                    },
+                    "completeness_stats": {
+                        "complete_count": 1 if (se_comp or 0) >= 4 else 0,
+                        "partially_complete_count": 1 if (se_comp or 0) == 3 else 0,
+                        "incomplete_count": 1 if se_comp is not None and se_comp <= 2 else 0,
+                        "missing_aspect_frequency": 100.0 if se_missing > 0 else 0.0,
+                        "total_missing_aspects": se_missing,
+                    },
+                }
+            else:
+                stats = self.get_dashboard_stats(batch_id=batch_id)
 
             return {
                 "report_mode": report_mode,

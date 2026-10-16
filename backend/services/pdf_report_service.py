@@ -356,7 +356,52 @@ class PDFReportService:
             ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
         ]))
         story.append(kpi_table)
-        story.append(Spacer(1, 14))
+        story.append(Spacer(1, 6))
+
+        # Visual Verdict Distribution Bar
+        tot_bar_width = 504
+        if total_records > 0:
+            w_pass = int(round(tot_bar_width * (pass_cnt / total_records))) if pass_cnt > 0 else 0
+            w_rev = int(round(tot_bar_width * (rev_cnt / total_records))) if rev_cnt > 0 else 0
+            w_fail = int(round(tot_bar_width * (fail_cnt / total_records))) if fail_cnt > 0 else 0
+            diff = tot_bar_width - (w_pass + w_rev + w_fail)
+            if w_pass > 0:
+                w_pass += diff
+            elif w_rev > 0:
+                w_rev += diff
+            elif w_fail > 0:
+                w_fail += diff
+
+            bar_cols = []
+            bar_cells = []
+            bar_styles = [
+                ("TOPPADDING", (0, 0), (-1, -1), 2),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 2),
+                ("ALIGN", (0, 0), (-1, -1), "CENTER"),
+            ]
+            c_idx = 0
+            if w_pass > 0:
+                bar_cols.append(w_pass)
+                bar_cells.append(Paragraph(f"<font color='white' size=7><b>PASS {pass_pct}%</b></font>" if w_pass >= 50 else "", self.style_cell))
+                bar_styles.append(("BACKGROUND", (c_idx, 0), (c_idx, 0), colors.HexColor("#16a34a")))
+                c_idx += 1
+            if w_rev > 0:
+                bar_cols.append(w_rev)
+                bar_cells.append(Paragraph(f"<font color='white' size=7><b>REVIEW {rev_pct}%</b></font>" if w_rev >= 55 else "", self.style_cell))
+                bar_styles.append(("BACKGROUND", (c_idx, 0), (c_idx, 0), colors.HexColor("#d97706")))
+                c_idx += 1
+            if w_fail > 0:
+                bar_cols.append(w_fail)
+                bar_cells.append(Paragraph(f"<font color='white' size=7><b>FAIL {fail_pct}%</b></font>" if w_fail >= 45 else "", self.style_cell))
+                bar_styles.append(("BACKGROUND", (c_idx, 0), (c_idx, 0), colors.HexColor("#dc2626")))
+                c_idx += 1
+
+            if bar_cols:
+                dist_bar = Table([bar_cells], colWidths=bar_cols, rowHeights=[14])
+                dist_bar.setStyle(TableStyle(bar_styles))
+                story.append(dist_bar)
+
+        story.append(Spacer(1, 12))
 
         # ----------------------------------------------------------------------
         # 3. Verification Dimensions Summary
@@ -517,53 +562,66 @@ class PDFReportService:
         # ----------------------------------------------------------------------
         # 6. Detailed Findings for Problematic & Flagged Responses
         # ----------------------------------------------------------------------
-        problematic_items = [
-            e for e in evaluations
-            if e.get("verdict") in ("FAIL", "NEEDS IMPROVEMENT", "REVIEW")
-            or (e.get("hallucination_risk") or "").upper() in ("MEDIUM", "HIGH")
-            or (e.get("accuracy_score") or 5) <= 2
-            or (e.get("completeness_score") or 5) <= 2
-        ]
+        is_single_audit = (total_records == 1 or report_mode == "Single Response Audit")
+        if is_single_audit:
+            problematic_items = evaluations
+        else:
+            problematic_items = [
+                e for e in evaluations
+                if e.get("verdict") in ("FAIL", "NEEDS IMPROVEMENT", "REVIEW")
+                or (e.get("hallucination_risk") or "").upper() in ("MEDIUM", "HIGH")
+                or (e.get("accuracy_score") or 5) <= 2
+                or (e.get("completeness_score") or 5) <= 2
+            ]
+            if not problematic_items and total_records > 0:
+                problematic_items = evaluations[:5]
 
         if problematic_items:
             story.append(PageBreak())
-            story.append(Paragraph("5. Detailed Findings: Flagged & Problematic Responses", self.style_h1))
+            section_title = (
+                "5. Detailed Single-Response Audit & Evidence Grounding"
+                if is_single_audit
+                else "5. Detailed Findings: Flagged Cases & Verification Samples"
+            )
+            story.append(Paragraph(section_title, self.style_h1))
             story.append(Paragraph(
-                f"A total of <b>{len(problematic_items)}</b> response(s) were flagged with quality deficiencies, "
-                f"unsupported assertions, factual contradictions, or significant omissions. "
-                f"Detailed breakdowns of the top findings are provided below.",
+                f"Detailed audit breakdown for <b>{len(problematic_items)}</b> evaluated response record(s), "
+                f"tracing factual grounding, dimension scores, atomic claims, and authoritative knowledge base citations.",
                 self.style_body,
             ))
             story.append(Spacer(1, 10))
 
-            for p_idx, p_item in enumerate(problematic_items[:12], 1):
+            for p_idx, p_item in enumerate(problematic_items[:15], 1):
                 eval_res = p_item.get("evaluation_result") or {}
                 hal_obj = eval_res.get("hallucination", {})
                 acc_obj = eval_res.get("accuracy", {})
                 comp_obj = eval_res.get("completeness", {})
+                rel_obj = eval_res.get("relevance", {})
                 v_details = p_item.get("verdict_details") or eval_res.get("verdict_details", {})
 
                 q_txt = p_item.get("question", "")
                 ans_txt = p_item.get("ai_response", "")
+                ref_txt = p_item.get("reference_answer", "")
                 flagged_claims = hal_obj.get("flagged_claims", [])
                 missing_aspects = comp_obj.get("missing_aspects", [])
+                addressed_aspects = comp_obj.get("addressed_aspects", [])
                 reasoning = (
                     v_details.get("consolidated_reasoning")
                     or p_item.get("verdict_reasoning")
                     or acc_obj.get("reasoning")
-                    or "Verification flagged errors against authoritative reference."
+                    or "Verification calibrated against authoritative reference knowledge."
                 )
 
                 crit_override = v_details.get("critical_override_applied", False)
                 crit_reason = v_details.get("critical_override_reason", "")
 
                 verdict = p_item.get("verdict", "FAIL")
-                v_color = "#b91c1c" if verdict == "FAIL" else "#b45309"
+                v_color = "#15803d" if verdict == "PASS" else "#b91c1c" if verdict == "FAIL" else "#b45309"
 
                 card_elements = []
                 header_p = Paragraph(
                     f"<b>Case #{p_idx} | Submission ID: {p_item.get('id', 'N/A')[:8]} | "
-                    f"Verdict: <font color='{v_color}'>{verdict}</font> (Score: {p_item.get('overall_score', 0)}/100)</b>",
+                    f"Verdict: <font color='{v_color}'>{verdict}</font> (Overall Score: {p_item.get('overall_score', 0)}/100)</b>",
                     self.style_h2,
                 )
                 card_elements.append(header_p)
@@ -575,10 +633,50 @@ class PDFReportService:
                     )
                     card_elements.append(alert_p)
 
+                # Question & Candidate Answer
                 q_p = Paragraph(f"<b>Question:</b> {q_txt}", self.style_body)
-                ans_p = Paragraph(f"<b>AI Response:</b> {ans_txt}", self.style_body)
+                ans_p = Paragraph(f"<b>AI Candidate Response:</b> {ans_txt}", self.style_body)
                 card_elements.append(q_p)
                 card_elements.append(ans_p)
+
+                # Reference Answer if provided
+                if ref_txt:
+                    ref_p = Paragraph(
+                        f"<b>Provided Ground Truth Reference:</b> <i>\"{ref_txt}\"</i>",
+                        ParagraphStyle("RefAnswer", parent=self.style_body, textColor=colors.HexColor("#1e40af")),
+                    )
+                    card_elements.append(ref_p)
+
+                # Retrieved Evidence from Knowledge Base
+                retrieved_ev = p_item.get("retrieved_evidence") or eval_res.get("retrieved_evidence", [])
+                if retrieved_ev:
+                    top_ev = retrieved_ev[0]
+                    ev_text = str(top_ev.get("text", "")).strip().replace("\n", " ")
+                    if len(ev_text) > 220:
+                        ev_text = ev_text[:217] + "..."
+                    ev_ds = top_ev.get("dataset_name") or top_ev.get("source") or "Reference Knowledge Base"
+                    ev_sim = float(top_ev.get("similarity_score") if top_ev.get("similarity_score") is not None else top_ev.get("similarity", 0.0))
+                    ev_p = Paragraph(
+                        f"<b>Supporting Evidence ({ev_ds} | Sim: {ev_sim:.2f}):</b> <i>\"{ev_text}\"</i>",
+                        ParagraphStyle("EvidenceSnippet", parent=self.style_body, textColor=colors.HexColor("#0f766e")),
+                    )
+                    card_elements.append(ev_p)
+
+                # Dimension Score Line
+                p_acc = p_item.get("accuracy_score") if p_item.get("accuracy_score") is not None else acc_obj.get("score", "—")
+                p_rel = p_item.get("relevance_score") if p_item.get("relevance_score") is not None else rel_obj.get("score", "—")
+                p_comp = p_item.get("completeness_score") if p_item.get("completeness_score") is not None else comp_obj.get("score", "—")
+                p_hr = str(p_item.get("hallucination_risk") or hal_obj.get("risk_level") or "LOW").upper()
+                p_hr_color = "#b91c1c" if p_hr == "HIGH" else "#b45309" if p_hr == "MEDIUM" else "#15803d"
+
+                dim_line = (
+                    f"<b>Accuracy:</b> {p_acc}/5 | "
+                    f"<b>Relevance:</b> {p_rel}/5 | "
+                    f"<b>Completeness:</b> {p_comp}/5 | "
+                    f"<b>Hallucination Risk:</b> <font color='{p_hr_color}'><b>{p_hr}</b></font>"
+                )
+                dim_p = Paragraph(dim_line, ParagraphStyle("DimLine", parent=self.style_body, fontSize=8, textColor=colors.HexColor("#0f172a")))
+                card_elements.append(dim_p)
 
                 if flagged_claims:
                     claims_text = "<br/>• ".join(f"<i>\"{fc.get('claim', fc) if isinstance(fc, dict) else fc}\"</i>" for fc in flagged_claims)
@@ -590,8 +688,13 @@ class PDFReportService:
 
                 if missing_aspects:
                     miss_text = ", ".join(f"'{m}'" for m in missing_aspects)
-                    miss_p = Paragraph(f"<b>Missing Requirements:</b> {miss_text}", self.style_body)
+                    miss_p = Paragraph(f"<b>Missing Requirements / Omissions:</b> {miss_text}", self.style_body)
                     card_elements.append(miss_p)
+
+                if addressed_aspects and is_single_audit:
+                    addr_text = ", ".join(f"'{a}'" for a in addressed_aspects)
+                    addr_p = Paragraph(f"<b>Addressed Facets:</b> {addr_text}", self.style_body)
+                    card_elements.append(addr_p)
 
                 reason_p = Paragraph(f"<b>Auditor Reasoning:</b> {reasoning}", self.style_muted)
                 card_elements.append(reason_p)
@@ -626,10 +729,20 @@ class PDFReportService:
                 "<b>Factual Consistency Calibration:</b> Incorporate explicit contradiction-checking guardrails into prompt "
                 "templates to catch known misconceptions (e.g. TruthfulQA adversarial questions)."
             )
+        if (avg_rel or 5.0) < 4.0:
+            recommendations.append(
+                "<b>Prompt Intent & Focus Alignment:</b> Responses exhibited topic drift or evaded prompt constraints. "
+                "Refine system prompt constraints to directly address user inquiries before providing background elaboration."
+            )
         if comp_incomplete_cnt > 0 or comp_partial_cnt > 0:
             recommendations.append(
                 "<b>Multi-Part Aspect Decomposition:</b> For compound questions, prompt the generative model to systematically "
                 "address all sub-questions before completing generation to avoid partial omissions."
+            )
+        if not recommendations:
+            recommendations.append(
+                "<b>Maintain Knowledge Base Grounding:</b> High accuracy and grounding observed across evaluated queries. "
+                "Continue expanding reference corpora to prevent future domain coverage gaps."
             )
         recommendations.append(
             "<b>Periodic Continuous Evaluation:</b> Track quality trends across evaluation batches to detect regression in model outputs."

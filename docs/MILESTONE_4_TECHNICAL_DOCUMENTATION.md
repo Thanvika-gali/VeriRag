@@ -245,40 +245,62 @@ Headers are case-insensitive and whitespace-tolerant.
 ---
 
 ## 23. Testing Methodology
-Comprehensive 14-test validation suite (`tests/test_m4_validation_suite.py`) confirming:
-1. `test_01`: Single evaluation pipeline end-to-end data flow.
-2. `test_02`: Batch evaluation pipeline from CSV parse to dashboard persistence.
-3. `test_03`: Correct response benchmark (high score, PASS verdict).
-4. `test_04`: Irrelevant response benchmark (low relevance, appropriate verdict).
-5. `test_05`: Incorrect response benchmark (low accuracy, unsupported claims).
-6. `test_06`: Incomplete response benchmark (low completeness, missing aspects identified).
-7. `test_07`: Hallucinated response benchmark (unsupported claim isolated, high risk).
-8. `test_08`: Contradictory response benchmark (contradiction detected, penalty applied).
-9. `test_09`: Evaluation without reference answer utilizing semantic RAG chunks.
-10. `test_10`: Resilient invalid CSV handling (missing fields, empty rows).
-11. `test_11`: Scoring consistency and reasoning correlation.
-12. `test_12`: Critical regression check (Nitrogen/methane photosynthesis failure test).
-13. `test_13`: Dashboard mathematical formula exactness ($Total = PASS + Review + FAIL$).
-14. `test_14`: PDF report generation service output and byte validity.
+PROOFRAG implements a rigorous two-layer testing framework:
+1. **Milestone 4 Master Audit Suite** (`tests/test_m4_comprehensive_audit.py`): 20 comprehensive end-to-end tests validating:
+   - **Case 1**: Fully correct response (high relevance, accuracy, completeness, low hallucination risk, PASS verdict).
+   - **Case 2**: Irrelevant response (low relevance, FAIL verdict).
+   - **Case 3**: Factually incorrect response (numerical and domain contradiction detection, accuracy $\le 2$, FAIL verdict).
+   - **Case 4**: Partially correct response (dimensional scores reflect partial completeness/accuracy, explanatory reasoning).
+   - **Case 5**: Incomplete response (missing aspects identified, completeness $\le 3$).
+   - **Case 6**: Hallucinated response (unsupported claims isolated, HIGH risk, FAIL verdict).
+   - **Case 7**: Contradictory response (contradiction against verified reference flagged, FAIL verdict).
+   - **Case 8**: No reference answer provided (semantic RAG retrieval grounds evaluation, PASS verdict).
+   - **Hallucination Scenarios 1–6**: Fully supported (0 ungrounded claims), single unsupported claim, multiple unsupported claims, contradictory claims (including numerical contradiction detection), partially supported claims, and completely unsupported counterfactuals.
+   - **Verdict Agent Validation**: Exact weights summation ($35\% + 25\% + 20\% + 20\% = 1.0$), threshold boundary tests ($75/50$), and critical safety overrides.
+   - **Batch Pipeline Fault Tolerance**: Malformed rows, missing fields, empty lines processed without halting valid rows.
+   - **Dashboard Mathematical Exactness**: Exact formula verification across all KPIs ($Total = PASS + Review + FAIL$, percentage summation, averages).
+   - **PDF Report Generation**: Generation verified across single, small, medium, and large batch sizes with multi-page overflow and visual verdict bars.
+   - **Two Distinct AI Systems Demonstration**: Verifies comparative evaluation between System A (Grounded RAG Assistant) and System B (Baseline Ungrounded LLM).
+   - **API Aliases**: Backward-compatible `/api/verify` and `/api/verify/batch` endpoint validation.
+
+2. **Milestone 4 Validation Suite** (`tests/test_m4_validation_suite.py`): 14 pipeline integration tests.
+3. **M1–M3 Regression Suites**: Retrieval, SQLite storage, Verdict Agent, Completeness Judge, and CSV audit tests.
 
 ---
 
 ## 24. Test Results
-- **M4 Validation Suite**: 14/14 tests passed (100% pass rate).
-- **Completeness Suite**: 10/10 tests passed.
-- **Full Project Suite**: 110/110 tests passed without regression across M1, M2, and M3 modules.
-- **Critical Photosynthesis Regression**: Stating nitrogen and methane for photosynthesis produces Accuracy Score 1 ("Completely Incorrect"), Overall Score 33, and Verdict `FAIL`.
+- **Milestone 4 Comprehensive Audit Suite** (`tests/test_m4_comprehensive_audit.py`): **20/20 passed (100%)**.
+- **M4 Validation Suite** (`tests/test_m4_validation_suite.py`): **14/14 passed (100%)**.
+- **Verdict Agent Suite** (`tests/test_verdict_agent.py`): **9/9 passed (100%)**.
+- **Completeness Suite** (`tests/test_completeness_judge.py`): **10/10 passed (100%)**.
+- **M3 Audit Suite** (`tests/test_m3_audit_suite.py`): **8/8 passed (100%)**.
+- **Full Project Test Suite**: **130/130 passed across all test files (0 failures, 0 regressions, 0 skipped, 152.35s runtime)**.
+- **Critical Photosynthesis Regression Check**: Stating nitrogen and methane for photosynthesis produces Accuracy Score 1 ("Completely Incorrect"), Overall Score 33, and Verdict `FAIL`.
+- **Numerical Contradiction Validation**: Water boiling at 25 °C vs 100 °C correctly triggers direct contradiction detection (Accuracy = 1, Verdict = FAIL).
+- **Executive PDF Report Verification**: Single response audits, small batches, and 50+ item batches render cleanly without table overlap, cut-off text, or memory leaks.
 
 ---
 
-## 25. Limitations
+## 25. Two Distinct AI Systems Demonstration
+PROOFRAG natively includes comparative benchmarking between two distinct AI systems:
+1. **System A — Grounded RAG Assistant**:
+   - Synthesizes answers strictly anchored in retrieved reference knowledge chunks.
+   - Demonstrates high relevance (5/5), high accuracy (5/5), complete coverage (5/5), and zero unsupported claims (`LOW` risk), consistently achieving `PASS`.
+2. **System B — Baseline Ungrounded LLM**:
+   - Generates plausible-sounding yet ungrounded responses containing common misconceptions, fabricated causal mechanisms, and numerical errors.
+   - Triggers claim-level hallucination flags, low accuracy scores (1–2), and definitive `FAIL` or `NEEDS IMPROVEMENT` verdicts.
+   - Pre-loaded interactive presets in the UI enable live one-click demonstration of both systems across Science, Geography, History, and Physics.
+
+---
+
+## 26. Limitations
 1. **Local Model Capacity**: Local sentence-transformers embeddings (`bge-small-en-v1.5`) rely on entity extraction heuristics when deep multi-hop reasoning is required without external LLM judges.
 2. **Domain-Specific Ontologies**: Specialized medical or legal terms outside TruthfulQA require custom document ingestion into the knowledge base for optimal grounding.
 3. **Execution Latency**: Full 4-dimension claim decomposition for long responses (500+ words) requires multiple embedding passes, scaling with claim count.
 
 ---
 
-## 26. Future Scope
+## 27. Future Scope
 1. **Multi-Modal Validation**: Extending judges to verify image captions and chart interpretations against document figures.
 2. **Streaming Judge Responses**: Token-by-token evaluation streaming over WebSockets for interactive chat applications.
 3. **Automated Dynamic Prompt Correction**: Self-correcting AI agent loop that automatically rewrites responses failing evaluation to achieve a verified `PASS`.

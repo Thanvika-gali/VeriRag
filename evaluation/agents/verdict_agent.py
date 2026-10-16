@@ -48,6 +48,37 @@ class VerdictAgent:
             needs_improvement_threshold if needs_improvement_threshold is not None else VERDICT_NEEDS_IMPROVEMENT_THRESHOLD
         )
 
+    @property
+    def weights(self) -> Dict[str, float]:
+        """Dictionary of dimension weights summing to 1.0."""
+        return {
+            "accuracy": self.w_accuracy,
+            "hallucination": self.w_hallucination,
+            "relevance": self.w_relevance,
+            "completeness": self.w_completeness,
+        }
+
+    def compute_verdict(
+        self,
+        relevance_score: int,
+        accuracy_score: int,
+        completeness_score: int = 5,
+        hallucination_risk: str = "LOW",
+    ) -> Dict[str, Any]:
+        """Convenience helper to compute a synthesized verdict from scalar scores."""
+        acc_dict = {"score": accuracy_score, "reasoning": "Direct score"}
+        rel_dict = {"score": relevance_score, "reasoning": "Direct score"}
+        hal_dict = {"risk_level": hallucination_risk, "hallucination_status": "NONE" if hallucination_risk == "LOW" else "PARTIAL" if hallucination_risk == "MEDIUM" else "HIGH", "flagged_claims": []}
+        comp_dict = {"score": completeness_score, "reasoning": "Direct score", "addressed_aspects": [], "missing_aspects": []}
+
+        verdict_res = self.synthesize_verdict(
+            accuracy_result=acc_dict,
+            relevance_result=rel_dict,
+            hallucination_result=hal_dict,
+            completeness_result=comp_dict,
+        )
+        return verdict_res.model_dump()
+
     def synthesize_verdict(
         self,
         accuracy_result: Dict[str, Any],

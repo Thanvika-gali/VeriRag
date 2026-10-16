@@ -11,6 +11,7 @@ import ReportsView from './components/ReportsView';
 import SystemStatusView from './components/SystemStatusView';
 import SettingsModal from './components/SettingsModal';
 import BatchVerifyView from './components/BatchVerifyView';
+import ErrorBoundary from './components/ErrorBoundary';
 import { Database, ShieldCheck, Cpu, Moon, Sun } from 'lucide-react';
 
 export default function App() {
@@ -148,14 +149,14 @@ export default function App() {
   const pageTitles = {
     verify: 'Verify Response',
     evaluate: 'Verify Response',
-    dashboard: 'Verify Response',
+    dashboard: 'Evaluation Dashboard',
     'batch-verify': 'Batch Verify',
     history: 'Evaluation History',
     'evidence-library': 'Evidence Library',
     'data-sources': 'Data Sources',
     'knowledge-base': 'Data Sources',
-    insights: 'Verification Insights',
-    analytics: 'Verification Insights',
+    insights: 'Evaluation Dashboard',
+    analytics: 'Evaluation Dashboard',
     reports: 'Audit Reports',
     'system-status': 'System Status',
     architecture: 'System Status',
@@ -222,71 +223,73 @@ export default function App() {
 
         {/* Dynamic Body Content */}
         <main className="content-body">
-          {(activePage === 'verify' || activePage === 'evaluate' || activePage === 'dashboard') && (
-            <div className="evaluate-layout-grid">
-              <section aria-label="Input Form Column">
-                <EvaluationForm
-                  onSubmit={handleEvaluate}
-                  loading={loading}
-                  errorMessage={errorMessage}
-                  onClearError={() => setErrorMessage(null)}
-                />
-              </section>
+          <ErrorBoundary key={activePage} onReset={() => setActivePage('verify')}>
+            {(activePage === 'verify' || activePage === 'evaluate') && (
+              <div className="evaluate-layout-grid">
+                <section aria-label="Input Form Column">
+                  <EvaluationForm
+                    onSubmit={handleEvaluate}
+                    loading={loading}
+                    errorMessage={errorMessage}
+                    onClearError={() => setErrorMessage(null)}
+                  />
+                </section>
 
-              <section aria-label="Evaluation Results Column">
-                <EvaluationResultView
-                  evaluation={currentEvaluation}
-                  onBackToForm={() => setCurrentEvaluation(null)}
-                />
-              </section>
-            </div>
-          )}
+                <section aria-label="Evaluation Results Column">
+                  <EvaluationResultView
+                    evaluation={currentEvaluation}
+                    onBackToForm={() => setCurrentEvaluation(null)}
+                  />
+                </section>
+              </div>
+            )}
 
-          {activePage === 'batch-verify' && (
-            <BatchVerifyView />
-          )}
+            {activePage === 'batch-verify' && (
+              <BatchVerifyView />
+            )}
 
-          {activePage === 'history' && (
-            <HistoryView
-              historyList={historyList}
-              loading={historyLoading}
-              onSelectSubmission={handleSelectSubmission}
-              onRefresh={fetchHistory}
-            />
-          )}
+            {activePage === 'history' && (
+              <HistoryView
+                historyList={historyList}
+                loading={historyLoading}
+                onSelectSubmission={handleSelectSubmission}
+                onRefresh={fetchHistory}
+              />
+            )}
 
-          {activePage === 'evidence-library' && (
-            <EvidenceLibraryView systemHealth={systemHealth} />
-          )}
+            {activePage === 'evidence-library' && (
+              <EvidenceLibraryView systemHealth={systemHealth} />
+            )}
 
-          {(activePage === 'data-sources' || activePage === 'knowledge-base') && (
-            <KnowledgeBaseView systemHealth={systemHealth} />
-          )}
+            {(activePage === 'data-sources' || activePage === 'knowledge-base') && (
+              <KnowledgeBaseView systemHealth={systemHealth} />
+            )}
 
-          {(activePage === 'insights' || activePage === 'analytics') && (
-            <AnalyticsView
-              analytics={analytics}
-              onSelectSubmission={handleSelectSubmission}
-              onNavigatePage={setActivePage}
-              onNewEvaluation={() => setActivePage('verify')}
-            />
-          )}
+            {(activePage === 'insights' || activePage === 'analytics' || activePage === 'dashboard') && (
+              <AnalyticsView
+                analytics={analytics}
+                onSelectSubmission={handleSelectSubmission}
+                onNavigatePage={setActivePage}
+                onNewEvaluation={() => setActivePage('verify')}
+              />
+            )}
 
-          {activePage === 'reports' && (
-            <ReportsView
-              currentEvaluation={currentEvaluation}
-              historyList={historyList}
-              onSelectSubmission={handleSelectSubmission}
-              onNewEvaluation={() => setActivePage('verify')}
-            />
-          )}
+            {activePage === 'reports' && (
+              <ReportsView
+                currentEvaluation={currentEvaluation}
+                historyList={historyList}
+                onSelectSubmission={handleSelectSubmission}
+                onNewEvaluation={() => setActivePage('verify')}
+              />
+            )}
 
-          {(activePage === 'system-status' || activePage === 'architecture') && (
-            <SystemStatusView
-              systemHealth={systemHealth}
-              onRefreshHealth={fetchHealth}
-            />
-          )}
+            {(activePage === 'system-status' || activePage === 'architecture') && (
+              <SystemStatusView
+                systemHealth={systemHealth}
+                onRefreshHealth={fetchHealth}
+              />
+            )}
+          </ErrorBoundary>
         </main>
       </div>
 

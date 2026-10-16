@@ -632,5 +632,59 @@ def get_report_data(
     )
 
 
+# ==============================================================================
+# REST API Convenience Aliases
+# ==============================================================================
+
+@router.post(
+    "/verify",
+    response_model=EvaluationSubmissionResponse,
+    status_code=status.HTTP_201_CREATED,
+    summary="Alias: Submit an AI response for evaluation",
+)
+def verify_response_alias(request: EvaluationSubmissionRequest):
+    """Alias for POST /api/submissions."""
+    return create_submission(request)
+
+
+@router.get(
+    "/verify",
+    response_model=List[SubmissionListItem],
+    summary="Alias: List past evaluations",
+)
+def list_verifications_alias(
+    limit: int = Query(default=50, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
+):
+    """Alias for GET /api/submissions."""
+    return list_submissions(limit=limit, offset=offset)
+
+
+@router.get(
+    "/verify/{submission_id}",
+    response_model=EvaluationSubmissionResponse,
+    summary="Alias: Retrieve evaluation details by ID",
+)
+def get_verification_alias(submission_id: str):
+    """Alias for GET /api/submissions/{submission_id}."""
+    return get_submission(submission_id)
+
+
+@router.post(
+    "/verify/batch",
+    response_model=BatchEvaluationResult,
+    status_code=status.HTTP_200_OK,
+    summary="Alias: Upload CSV for batch AI response verification",
+)
+async def verify_batch_alias(
+    file: UploadFile = File(...),
+    dataset_filter: Optional[str] = Query(default=None),
+    top_k: int = Query(default=5, ge=1, le=20),
+):
+    """Alias for POST /api/batch/evaluate."""
+    return await evaluate_batch_csv(file=file, dataset_filter=dataset_filter, top_k=top_k)
+
+
+
 
 

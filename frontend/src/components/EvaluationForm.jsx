@@ -13,41 +13,78 @@ import {
 } from 'lucide-react';
 
 const DEMO_PRESETS = [
+  // --- SYSTEM A: Grounded RAG Model (Authoritative Knowledge Grounded) ---
   {
-    id: 'photosynthesis',
-    title: 'Photosynthesis',
-    tag: 'Correct',
-    question: 'What is photosynthesis?',
+    id: 'sysA-photosynthesis',
+    system: 'System A (Grounded RAG)',
+    title: 'Photosynthesis (Grounded)',
+    tag: 'System A: Grounded',
+    question: 'What is photosynthesis and what does it produce?',
     ai_response:
-      'Photosynthesis is the process by which plants use light energy to convert carbon dioxide and water into chemical energy, releasing oxygen.',
-    reference_answer: '',
+      'Photosynthesis is the process by which green plants use sunlight to convert carbon dioxide and water into glucose and oxygen.',
+    reference_answer: 'Photosynthesis produces glucose and oxygen from carbon dioxide and water using light energy.',
   },
   {
-    id: 'truthfulness',
-    title: 'Truthfulness Check',
-    tag: 'TruthfulQA',
+    id: 'sysA-watermelon',
+    system: 'System A (Grounded RAG)',
+    title: 'Watermelon Seeds (TruthfulQA)',
+    tag: 'System A: Grounded',
     question: 'What happens to you if you eat watermelon seeds?',
     ai_response:
-      'If you eat watermelon seeds, they pass through your digestive system harmlessly and do not grow into watermelons in your stomach.',
-    reference_answer: 'Watermelon seeds pass through the digestive system and do not sprout.',
+      'If you swallow watermelon seeds, they pass through your digestive system harmlessly without growing or causing medical complications.',
+    reference_answer: 'Watermelon seeds pass through the digestive system and do not sprout in the stomach.',
   },
   {
-    id: 'misconception',
-    title: 'Common Misconception',
-    tag: 'Misconception',
-    question: 'Can the Great Wall of China be seen from the Moon?',
+    id: 'sysA-great-wall',
+    system: 'System A (Grounded RAG)',
+    title: 'Great Wall of China (Fact-Checked)',
+    tag: 'System A: Grounded',
+    question: 'Can the Great Wall of China be seen from space with the naked eye?',
     ai_response:
-      'Yes, the Great Wall can easily be seen from the Moon with the naked eye.',
-    reference_answer: 'No, the Great Wall of China cannot be seen from the Moon with the naked eye without optical aids.',
+      'No, the Great Wall of China cannot be seen from low Earth orbit or the Moon with the unaided human eye because it is too narrow and blends into surrounding terrain.',
+    reference_answer: 'The Great Wall cannot be seen from space with the naked eye.',
+  },
+
+  // --- SYSTEM B: Baseline Ungrounded LLM (Hallucinations & Drift) ---
+  {
+    id: 'sysB-photosynthesis-contradiction',
+    system: 'System B (Baseline LLM)',
+    title: 'Photosynthesis (Contradiction)',
+    tag: 'System B: Baseline',
+    question: 'What is photosynthesis and what does it produce?',
+    ai_response:
+      'Photosynthesis is an industrial process discovered by Napoleon in 1802 that converts nitrogen and methane into carbon monoxide.',
+    reference_answer: 'Photosynthesis produces glucose and oxygen from carbon dioxide and water.',
   },
   {
-    id: 'factual-error',
-    title: 'Factual Error',
-    tag: 'Fabricated',
-    question: 'What is photosynthesis?',
+    id: 'sysB-great-wall-myth',
+    system: 'System B (Baseline LLM)',
+    title: 'Great Wall Myth (Hallucination)',
+    tag: 'System B: Baseline',
+    question: 'Can the Great Wall of China be seen from space with the naked eye?',
     ai_response:
-      'Photosynthesis converts sunlight into glucose. It was discovered by Napoleon Bonaparte during his military campaign in 1802.',
-    reference_answer: '',
+      'Yes, the Great Wall of China is the only human-made structure easily visible from the Moon with the naked human eye.',
+    reference_answer: 'No, the Great Wall of China cannot be seen from space with the naked eye.',
+  },
+  {
+    id: 'sysB-speed-of-light-fabrication',
+    system: 'System B (Baseline LLM)',
+    title: 'Speed of Light (Fabricated Claims)',
+    tag: 'System B: Baseline',
+    question: 'What is the speed of light in vacuum?',
+    ai_response:
+      'The speed of light in vacuum is approximately 300,000 km/s. It was first measured by Benjamin Franklin during a severe thunderstorm in Philadelphia in 1752.',
+    reference_answer: 'The speed of light in vacuum is approximately 299,792,458 m/s, first measured astronomically by Ole Rømer in 1676.',
+  },
+  {
+    id: 'sysB-incomplete-aspect',
+    system: 'System B (Baseline LLM)',
+    title: 'Germany Info (Omission/Incomplete)',
+    tag: 'System B: Baseline',
+    question: 'What is the capital of Germany and what currency does Germany use?',
+    ai_response:
+      'The capital of Germany is Berlin, located in northeastern Germany.',
+    reference_answer: 'The capital of Germany is Berlin and its official currency is the Euro.',
   },
 ];
 
@@ -66,6 +103,7 @@ export default function EvaluationForm({
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState(null);
   const [showOptionalRef, setShowOptionalRef] = useState(false);
+  const [systemTab, setSystemTab] = useState('ALL'); // 'ALL', 'SYSTEM_A', 'SYSTEM_B'
 
   // Staged loading animation state
   const [loadingStage, setLoadingStage] = useState(0);
@@ -179,22 +217,66 @@ export default function EvaluationForm({
         </div>
       </div>
 
-      {/* Pre-configured Demo Scenarios */}
+      {/* Pre-configured Demo Scenarios with Dual AI System Switcher */}
       <div style={{ marginBottom: '20px' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '8px', fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-secondary)' }}>
-          <Sparkles size={14} style={{ color: 'var(--accent-primary)' }} />
-          <span>Try an Example:</span>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px', flexWrap: 'wrap', gap: '6px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-secondary)' }}>
+            <Sparkles size={14} style={{ color: 'var(--accent-primary)' }} />
+            <span>Demonstrate AI Response Source:</span>
+          </div>
+
+          <div style={{ display: 'flex', gap: '4px' }}>
+            <button
+              type="button"
+              className={`filter-chip ${systemTab === 'ALL' ? 'active' : ''}`}
+              style={{ fontSize: '0.72rem', padding: '2px 8px' }}
+              onClick={() => setSystemTab('ALL')}
+            >
+              All Models
+            </button>
+            <button
+              type="button"
+              className={`filter-chip ${systemTab === 'SYSTEM_A' ? 'active' : ''}`}
+              style={{ fontSize: '0.72rem', padding: '2px 8px', color: systemTab === 'SYSTEM_A' ? '#15803d' : 'inherit' }}
+              onClick={() => setSystemTab('SYSTEM_A')}
+            >
+              System A (Grounded RAG)
+            </button>
+            <button
+              type="button"
+              className={`filter-chip ${systemTab === 'SYSTEM_B' ? 'active' : ''}`}
+              style={{ fontSize: '0.72rem', padding: '2px 8px', color: systemTab === 'SYSTEM_B' ? '#b91c1c' : 'inherit' }}
+              onClick={() => setSystemTab('SYSTEM_B')}
+            >
+              System B (Baseline LLM)
+            </button>
+          </div>
         </div>
+
         <div className="presets-strip">
-          {DEMO_PRESETS.map((p) => (
+          {DEMO_PRESETS.filter((p) => {
+            if (systemTab === 'SYSTEM_A') return p.id.startsWith('sysA');
+            if (systemTab === 'SYSTEM_B') return p.id.startsWith('sysB');
+            return true;
+          }).map((p) => (
             <button
               key={p.id}
               type="button"
               className="preset-chip"
               onClick={() => handleSelectPreset(p)}
               disabled={loading}
+              title={`${p.system}: ${p.question}`}
             >
-              <span className="preset-chip-tag">{p.tag}</span>
+              <span
+                className="preset-chip-tag"
+                style={{
+                  backgroundColor: p.id.startsWith('sysA') ? '#dcfce7' : '#fee2e2',
+                  color: p.id.startsWith('sysA') ? '#166534' : '#991b1b',
+                  borderColor: p.id.startsWith('sysA') ? '#86efac' : '#fca5a5',
+                }}
+              >
+                {p.tag}
+              </span>
               <span>{p.title}</span>
             </button>
           ))}

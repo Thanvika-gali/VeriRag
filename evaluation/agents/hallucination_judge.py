@@ -403,6 +403,14 @@ class HallucinationDetectionAgent:
                         f"whereas the response incorrectly asserts '{', '.join(unmatched_entities)}'."
                     )
 
+            c_nums = set(re.findall(r"\b\d+(?:\.\d+)?\b", claim_lower))
+            r_nums = set(re.findall(r"\b\d+(?:\.\d+)?\b", combined_ref_lower))
+            if not is_contradicted and c_nums and r_nums and c_nums.isdisjoint(r_nums):
+                num_context_words = {"degree", "degrees", "celsius", "fahrenheit", "kelvin", "percent", "%", "meters", "miles", "km", "kilometers", "hours", "days", "years", "seconds", "temperature", "boil", "boils", "freeze", "freezes", "speed"}
+                if any(w in claim_lower and w in combined_ref_lower for w in num_context_words) or term_overlap >= 0.40 or best_sim >= 0.55:
+                    is_contradicted = True
+                    contradiction_reason = f"Numerical/quantitative contradiction: claim asserts {', '.join(sorted(c_nums))} whereas reference evidence specifies {', '.join(sorted(r_nums))}."
+
             all_distinct_unmatched = len(distinct_entities) >= 1 and len(unmatched_entities) == len(distinct_entities)
 
             if is_contradicted:

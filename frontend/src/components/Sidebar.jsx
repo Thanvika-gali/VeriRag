@@ -29,10 +29,10 @@ export default function Sidebar({ activePage, setActivePage, historyCount = 0, o
       ],
     },
     {
-      category: 'INSIGHTS',
+      category: 'INSIGHTS & DASHBOARD',
       items: [
-        { id: 'insights', label: 'Verification Insights', icon: BarChart3 },
-        { id: 'reports', label: 'Reports', icon: FileText },
+        { id: 'dashboard', label: 'Evaluation Dashboard', icon: BarChart3 },
+        { id: 'reports', label: 'Reports & Export', icon: FileText },
       ],
     },
     {
@@ -62,7 +62,9 @@ export default function Sidebar({ activePage, setActivePage, historyCount = 0, o
             <div style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
               {section.items.map((item) => {
                 const Icon = item.icon;
-                const isActive = activePage === item.id;
+                const isActive =
+                  activePage === item.id ||
+                  (item.id === 'dashboard' && (activePage === 'insights' || activePage === 'analytics'));
                 return (
                   <button
                     key={item.id}
