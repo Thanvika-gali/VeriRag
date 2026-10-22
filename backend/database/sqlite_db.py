@@ -26,6 +26,7 @@ class SubmissionDB:
             self.db_path = str(p if p.is_absolute() else PROJECT_ROOT / p)
         else:
             self.db_path = DEFAULT_DB_PATH
+        self._initialized = False
         self.init_db()
 
     def _get_connection(self) -> sqlite3.Connection:
@@ -36,6 +37,9 @@ class SubmissionDB:
 
     def init_db(self) -> None:
         """Initialize submissions and batch_jobs table schemas and migrate missing columns non-destructively."""
+        if self._initialized:
+            return
+
         with self._get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute("""
@@ -85,6 +89,7 @@ class SubmissionDB:
                     cursor.execute(f"ALTER TABLE submissions ADD COLUMN {col_name} {col_type}")
 
             conn.commit()
+            self._initialized = True
 
     def create_submission(
         self,

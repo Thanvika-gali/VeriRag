@@ -8,6 +8,14 @@ For ChromaDB cosine space: distance d = 1 - cos(theta), so similarity = 1.0 - d.
 import os
 from pathlib import Path
 
+# Thread and memory limits for cloud containers (e.g. Render 512MB RAM limit)
+os.environ.setdefault("OMP_NUM_THREADS", "1")
+os.environ.setdefault("MKL_NUM_THREADS", "1")
+os.environ.setdefault("OPENBLAS_NUM_THREADS", "1")
+os.environ.setdefault("VECLIB_MAXIMUM_THREADS", "1")
+os.environ.setdefault("NUMEXPR_NUM_THREADS", "1")
+os.environ.setdefault("TOKENIZERS_PARALLELISM", "false")
+
 # Project root directory (parent of backend/)
 PROJECT_ROOT: Path = Path(__file__).resolve().parent.parent
 

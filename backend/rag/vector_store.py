@@ -20,6 +20,9 @@ DEFAULT_COLLECTION_NAME = "verirag_knowledge_base"
 class VectorStoreManager:
     """Manages local ChromaDB vector store initialization, indexing, and collection querying."""
 
+    # Class-level client cache ensuring one persistent client per persist directory across all instances
+    _shared_clients: Dict[str, Any] = {}
+
     def __init__(
         self,
         persist_dir: Optional[str] = None,
@@ -36,22 +39,27 @@ class VectorStoreManager:
 
     @property
     def client(self) -> chromadb.PersistentClient:
-        """Lazy-initialize ChromaDB persistent client."""
+        """Lazy-initialize ChromaDB persistent client with process-wide directory sharing."""
         if self._client is None:
-            os.makedirs(self.persist_dir, exist_ok=True)
-            self._client = chromadb.PersistentClient(
-                path=self.persist_dir,
-                settings=Settings(anonymized_telemetry=False, is_persistent=True),
-            )
+            if self.persist_dir in self._shared_clients:
+                self._client = self._shared_clients[self.persist_dir]
+            else:
+                os.makedirs(self.persist_dir, exist_ok=True)
+                self._client = chromadb.PersistentClient(
+                    path=self.persist_dir,
+                    settings=Settings(anonymized_telemetry=False, is_persistent=True),
+                )
+                self._shared_clients[self.persist_dir] = self._client
         return self._client
 
     @property
     def collection(self):
-        """Lazy-initialize or get the default collection."""
+        """Lazy-initialize collection without instantiating redundant default embedding models."""
         if self._collection is None:
             self._collection = self.client.get_or_create_collection(
                 name=self.collection_name,
                 metadata={"hnsw:space": "cosine"},
+                embedding_function=None,
             )
         return self._collection
 

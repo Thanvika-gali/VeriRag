@@ -210,24 +210,24 @@ def get_knowledge_base_stats():
     """Return live dataset counts and status from ChromaDB vector store."""
     total_chunks = vector_store.count()
 
-    # Query exact dataset representation from ChromaDB collection metadata
+    # Query exact dataset representation from ChromaDB collection metadata without loading chunk documents
     tqa_count = 0
     squad_count = 0
     custom_count = 0
     try:
-        tqa_res = vector_store.collection.get(where={"dataset_name": "TruthfulQA"})
+        tqa_res = vector_store.collection.get(where={"dataset_name": "TruthfulQA"}, include=[])
         tqa_count = len(tqa_res.get("ids", []))
     except Exception:
         tqa_count = 0
 
     try:
-        squad_res = vector_store.collection.get(where={"dataset_name": "SQuAD"})
+        squad_res = vector_store.collection.get(where={"dataset_name": "SQuAD"}, include=[])
         squad_count = len(squad_res.get("ids", []))
     except Exception:
         squad_count = 0
 
     try:
-        custom_res = vector_store.collection.get(where={"dataset_name": "Custom"})
+        custom_res = vector_store.collection.get(where={"dataset_name": "Custom"}, include=[])
         custom_count = len(custom_res.get("ids", []))
     except Exception:
         custom_count = 0
@@ -235,7 +235,7 @@ def get_knowledge_base_stats():
     # Ensure counts reconcile dynamically from actual collection metadata
     if total_chunks > 0 and tqa_count == 0 and squad_count == 0:
         try:
-            all_meta = vector_store.collection.get().get("metadatas", []) or []
+            all_meta = vector_store.collection.get(include=["metadatas"]).get("metadatas", []) or []
             tqa_count = sum(1 for m in all_meta if m and m.get("dataset_name") == "TruthfulQA")
             squad_count = sum(1 for m in all_meta if m and m.get("dataset_name") == "SQuAD")
             custom_count = sum(1 for m in all_meta if m and m.get("dataset_name") == "Custom")
