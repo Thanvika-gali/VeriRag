@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import Sidebar from './components/Sidebar';
 import DashboardView from './components/DashboardView';
@@ -12,7 +13,13 @@ import SystemStatusView from './components/SystemStatusView';
 import SettingsModal from './components/SettingsModal';
 import BatchVerifyView from './components/BatchVerifyView';
 import ErrorBoundary from './components/ErrorBoundary';
-import { Database, ShieldCheck, Cpu, Moon, Sun } from 'lucide-react';
+import { Database, Moon, Sun } from 'lucide-react';
+
+// Use the Render backend instead of the Vercel frontend URL.
+const API_BASE_URL = (
+  import.meta.env.VITE_API_BASE_URL ||
+  'https://verirag-uyuz.onrender.com'
+).replace(/\/+$/, '');
 
 export default function App() {
   const [activePage, setActivePage] = useState('verify');
@@ -25,7 +32,7 @@ export default function App() {
   const [errorMessage, setErrorMessage] = useState(null);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
 
-  // Theme state with localStorage persistence
+  // Theme state with localStorage persistence.
   const [theme, setTheme] = useState(() => {
     return localStorage.getItem('proofRagTheme') || 'light';
   });
@@ -47,10 +54,13 @@ export default function App() {
 
   const fetchHealth = async () => {
     try {
-      const res = await fetch('/api/health');
+      const res = await fetch(`${API_BASE_URL}/api/health`);
+
       if (res.ok) {
         const data = await res.json();
         setSystemHealth(data);
+      } else {
+        console.warn('[PROOFRAG] Health check returned:', res.status);
       }
     } catch (err) {
       console.warn('[PROOFRAG] Health check warning:', err);
@@ -59,11 +69,17 @@ export default function App() {
 
   const fetchHistory = async () => {
     setHistoryLoading(true);
+
     try {
-      const res = await fetch('/api/submissions?limit=50');
+      const res = await fetch(
+        `${API_BASE_URL}/api/submissions?limit=50`
+      );
+
       if (res.ok) {
         const data = await res.json();
         setHistoryList(Array.isArray(data) ? data : []);
+      } else {
+        console.warn('[PROOFRAG] History request returned:', res.status);
       }
     } catch (err) {
       console.warn('[PROOFRAG] History fetch warning:', err);
@@ -74,10 +90,13 @@ export default function App() {
 
   const fetchAnalytics = async () => {
     try {
-      const res = await fetch('/api/analytics');
+      const res = await fetch(`${API_BASE_URL}/api/analytics`);
+
       if (res.ok) {
         const data = await res.json();
         setAnalytics(data);
+      } else {
+        console.warn('[PROOFRAG] Analytics request returned:', res.status);
       }
     } catch (err) {
       console.warn('[PROOFRAG] Analytics fetch warning:', err);
@@ -89,38 +108,48 @@ export default function App() {
     setErrorMessage(null);
 
     try {
-      const res = await fetch('/api/submissions', {
+      const res = await fetch(`${API_BASE_URL}/api/submissions`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+        },
         body: JSON.stringify(formData),
       });
 
       const contentType = res.headers.get('content-type');
 
       if (!res.ok) {
-        let errMsg = 'Unable to verify response. Please check that the backend is running.';
+        let errMsg =
+          'Unable to verify response. Please check that the backend is running.';
+
         if (contentType && contentType.includes('application/json')) {
           try {
             const errData = await res.json();
             errMsg = errData.error || errData.detail || errMsg;
           } catch {
-            // fallback
+            // Keep the fallback error message.
           }
         }
+
         throw new Error(errMsg);
       }
 
       const data = await res.json();
       setCurrentEvaluation(data);
-      fetchHistory();
-      fetchAnalytics();
-      fetchHealth();
+
+      await Promise.all([
+        fetchHistory(),
+        fetchAnalytics(),
+        fetchHealth(),
+      ]);
     } catch (err) {
       console.error('[PROOFRAG Error]:', err);
+
       const userMsg =
         err.message && !err.message.includes('Traceback')
           ? err.message
           : 'Unable to verify response. Please verify backend connectivity.';
+
       setErrorMessage(userMsg);
     } finally {
       setLoading(false);
@@ -132,15 +161,22 @@ export default function App() {
     setErrorMessage(null);
 
     try {
-      const res = await fetch(`/api/submissions/${submissionId}`);
+      const res = await fetch(
+        `${API_BASE_URL}/api/submissions/${encodeURIComponent(submissionId)}`
+      );
+
       if (!res.ok) {
         throw new Error('Unable to retrieve submission record.');
       }
+
       const data = await res.json();
       setCurrentEvaluation(data);
       setActivePage('verify');
     } catch (err) {
-      setErrorMessage(err.message || 'Unable to load submission details.');
+      console.error('[PROOFRAG] Submission retrieval error:', err);
+      setErrorMessage(
+        err.message || 'Unable to load submission details.'
+      );
     } finally {
       setLoading(false);
     }
@@ -177,7 +213,9 @@ export default function App() {
         {/* Top Header Bar */}
         <header className="topbar">
           <div className="topbar-page-info">
-            <h1 className="topbar-title">{pageTitles[activePage] || 'PROOFRAG'}</h1>
+            <h1 className="topbar-title">
+              {pageTitles[activePage] || 'PROOFRAG'}
+            </h1>
           </div>
 
           <div className="topbar-meta-row">
@@ -187,8 +225,14 @@ export default function App() {
               id="theme-toggle-btn"
               className="theme-toggle-btn"
               onClick={toggleTheme}
-              title={`Switch to ${theme === 'light' ? 'Dark' : 'Light'} Mode (Current: ${theme === 'light' ? 'Light' : 'Dark'})`}
-              aria-label={`Switch to ${theme === 'light' ? 'Dark' : 'Light'} Mode`}
+              title={`Switch to ${
+                theme === 'light' ? 'Dark' : 'Light'
+              } Mode (Current: ${
+                theme === 'light' ? 'Light' : 'Dark'
+              })`}
+              aria-label={`Switch to ${
+                theme === 'light' ? 'Dark' : 'Light'
+              } Mode`}
             >
               {theme === 'light' ? (
                 <>
@@ -212,10 +256,15 @@ export default function App() {
             </div>
 
             <div className="telemetry-chip">
-              <Database size={13} style={{ color: 'var(--accent-primary)' }} />
+              <Database
+                size={13}
+                style={{ color: 'var(--accent-primary)' }}
+              />
               <span>Chunks:</span>
               <strong style={{ color: 'var(--text-primary)' }}>
-                {systemHealth?.total_indexed_chunks !== undefined ? systemHealth.total_indexed_chunks : '—'}
+                {systemHealth?.total_indexed_chunks !== undefined
+                  ? systemHealth.total_indexed_chunks
+                  : '—'}
               </strong>
             </div>
           </div>
@@ -223,7 +272,10 @@ export default function App() {
 
         {/* Dynamic Body Content */}
         <main className="content-body">
-          <ErrorBoundary key={activePage} onReset={() => setActivePage('verify')}>
+          <ErrorBoundary
+            key={activePage}
+            onReset={() => setActivePage('verify')}
+          >
             {(activePage === 'verify' || activePage === 'evaluate') && (
               <div className="evaluate-layout-grid">
                 <section aria-label="Input Form Column">
@@ -244,9 +296,7 @@ export default function App() {
               </div>
             )}
 
-            {activePage === 'batch-verify' && (
-              <BatchVerifyView />
-            )}
+            {activePage === 'batch-verify' && <BatchVerifyView />}
 
             {activePage === 'history' && (
               <HistoryView
@@ -261,11 +311,14 @@ export default function App() {
               <EvidenceLibraryView systemHealth={systemHealth} />
             )}
 
-            {(activePage === 'data-sources' || activePage === 'knowledge-base') && (
+            {(activePage === 'data-sources' ||
+              activePage === 'knowledge-base') && (
               <KnowledgeBaseView systemHealth={systemHealth} />
             )}
 
-            {(activePage === 'insights' || activePage === 'analytics' || activePage === 'dashboard') && (
+            {(activePage === 'insights' ||
+              activePage === 'analytics' ||
+              activePage === 'dashboard') && (
               <AnalyticsView
                 analytics={analytics}
                 onSelectSubmission={handleSelectSubmission}
@@ -283,7 +336,8 @@ export default function App() {
               />
             )}
 
-            {(activePage === 'system-status' || activePage === 'architecture') && (
+            {(activePage === 'system-status' ||
+              activePage === 'architecture') && (
               <SystemStatusView
                 systemHealth={systemHealth}
                 onRefreshHealth={fetchHealth}
