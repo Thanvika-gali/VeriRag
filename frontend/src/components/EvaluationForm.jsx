@@ -12,6 +12,11 @@ import {
   Check,
 } from 'lucide-react';
 
+const API_BASE_URL = (
+  import.meta.env.VITE_API_BASE_URL ||
+  'https://verirag-uyuz.onrender.com'
+).replace(/\/+$/, '');
+
 const DEMO_PRESETS = [
   // --- SYSTEM A: Grounded RAG Model (Authoritative Knowledge Grounded) ---
   {
@@ -169,7 +174,7 @@ export default function EvaluationForm({
     formData.append('file', file);
 
     try {
-      const res = await fetch('/api/upload-document', {
+      const res = await fetch(`${API_BASE_URL}/api/upload-document`, {
         method: 'POST',
         body: formData,
       });
@@ -228,7 +233,7 @@ export default function EvaluationForm({
           <div style={{ display: 'flex', gap: '4px' }}>
             <button
               type="button"
-              className={filter-chip ${systemTab === 'ALL' ? 'active' : ''}}
+              className={`filter-chip ${systemTab === 'ALL' ? 'active' : ''}`}
               style={{ fontSize: '0.72rem', padding: '2px 8px' }}
               onClick={() => setSystemTab('ALL')}
             >
@@ -236,7 +241,7 @@ export default function EvaluationForm({
             </button>
             <button
               type="button"
-              className={filter-chip ${systemTab === 'SYSTEM_A' ? 'active' : ''}}
+              className={`filter-chip ${systemTab === 'SYSTEM_A' ? 'active' : ''}`}
               style={{ fontSize: '0.72rem', padding: '2px 8px', color: systemTab === 'SYSTEM_A' ? '#15803d' : 'inherit' }}
               onClick={() => setSystemTab('SYSTEM_A')}
             >
@@ -244,7 +249,7 @@ export default function EvaluationForm({
             </button>
             <button
               type="button"
-              className={filter-chip ${systemTab === 'SYSTEM_B' ? 'active' : ''}}
+              className={`filter-chip ${systemTab === 'SYSTEM_B' ? 'active' : ''}`}
               style={{ fontSize: '0.72rem', padding: '2px 8px', color: systemTab === 'SYSTEM_B' ? '#b91c1c' : 'inherit' }}
               onClick={() => setSystemTab('SYSTEM_B')}
             >
@@ -265,7 +270,7 @@ export default function EvaluationForm({
               className="preset-chip"
               onClick={() => handleSelectPreset(p)}
               disabled={loading}
-              title={${p.system}: ${p.question}}
+              title={`${p.system}: ${p.question}`}
             >
               <span
                 className="preset-chip-tag"
@@ -506,27 +511,27 @@ export default function EvaluationForm({
             <div className="loading-subtitle">Cross-checking claims and evaluating factual grounding</div>
 
             <div className="loading-stages-list">
-              <div className={stage-item ${loadingStage >= 1 ? 'completed' : 'active'}}>
+              <div className={`stage-item ${loadingStage >= 1 ? 'completed' : 'active'}`}>
                 {loadingStage >= 1 ? <Check size={14} /> : <span style={{ width: 14 }}>●</span>}
                 <span>Input validated</span>
               </div>
-              <div className={stage-item ${loadingStage >= 2 ? 'completed' : loadingStage === 1 ? 'active' : ''}}>
+              <div className={`stage-item ${loadingStage >= 2 ? 'completed' : loadingStage === 1 ? 'active' : ''}`}>
                 {loadingStage >= 2 ? <Check size={14} /> : <span style={{ width: 14 }}>●</span>}
                 <span>Evidence retrieved (ChromaDB)</span>
               </div>
-              <div className={stage-item ${loadingStage >= 3 ? 'completed' : loadingStage === 2 ? 'active' : ''}}>
+              <div className={`stage-item ${loadingStage >= 3 ? 'completed' : loadingStage === 2 ? 'active' : ''}`}>
                 {loadingStage >= 3 ? <Check size={14} /> : <span style={{ width: 14 }}>●</span>}
                 <span>Evaluating topical relevance</span>
               </div>
-              <div className={stage-item ${loadingStage >= 4 ? 'completed' : loadingStage === 3 ? 'active' : ''}}>
+              <div className={`stage-item ${loadingStage >= 4 ? 'completed' : loadingStage === 3 ? 'active' : ''}`}>
                 {loadingStage >= 4 ? <Check size={14} /> : <span style={{ width: 14 }}>●</span>}
                 <span>Checking factual accuracy</span>
               </div>
-              <div className={stage-item ${loadingStage >= 5 ? 'completed' : loadingStage === 4 ? 'active' : ''}}>
+              <div className={`stage-item ${loadingStage >= 5 ? 'completed' : loadingStage === 4 ? 'active' : ''}`}>
                 {loadingStage >= 5 ? <Check size={14} /> : <span style={{ width: 14 }}>●</span>}
                 <span>Detecting hallucinated assertions</span>
               </div>
-              <div className={stage-item ${loadingStage >= 6 ? 'completed' : loadingStage === 5 ? 'active' : ''}}>
+              <div className={`stage-item ${loadingStage >= 6 ? 'completed' : loadingStage === 5 ? 'active' : ''}`}>
                 {loadingStage >= 6 ? <Check size={14} /> : <span style={{ width: 14 }}>●</span>}
                 <span>Completeness evaluation & verdict synthesis</span>
               </div>
